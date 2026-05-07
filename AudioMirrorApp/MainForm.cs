@@ -33,6 +33,7 @@ internal sealed class MainForm : Form
     {
         this.startAfterShown = startAfterShown;
         Text = "AudioMirror";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
         Width = 760;
         Height = 360;
