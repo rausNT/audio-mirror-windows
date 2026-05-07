@@ -249,7 +249,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
 
         captureAudioClient = CoreAudio.ActivateAudioClient(source.Device);
         captureAudioClient.GetMixFormat(out format);
-        Format = AudioFormat.FromPointer(format);
+        Format = AudioFormatInfo.FromPointer(format);
 
         var session = Guid.Empty;
         var bufferDuration = CoreAudio.RefTimesPerSecond / 10;
@@ -301,7 +301,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
     public string SourceName { get; }
     public string FirstTargetName { get; }
     public string SecondTargetName { get; }
-    public AudioFormat Format { get; }
+    public AudioFormatInfo Format { get; }
     public long Packets { get; private set; }
     public long CapturedFrames { get; private set; }
     public long FirstWrittenFrames => firstSink.WrittenFrames;
@@ -377,39 +377,4 @@ internal sealed class WasapiMirrorEngine : IDisposable
         }
     }
 
-    public sealed class AudioFormat
-    {
-        public required ushort FormatTag { get; init; }
-        public required ushort BlockAlign { get; init; }
-        public required int SampleRate { get; init; }
-        public required int Bits { get; init; }
-        public required int ValidBits { get; init; }
-        public required Guid SubFormat { get; init; }
-
-        public static AudioFormat FromPointer(IntPtr format)
-        {
-            var formatTag = (ushort)Marshal.ReadInt16(format, 0);
-            var bits = Marshal.ReadInt16(format, 14);
-            var validBits = bits;
-            var subFormat = Guid.Empty;
-
-            if (formatTag == 0xFFFE)
-            {
-                validBits = Marshal.ReadInt16(format, 22);
-                var guidBytes = new byte[16];
-                Marshal.Copy(IntPtr.Add(format, 24), guidBytes, 0, 16);
-                subFormat = new Guid(guidBytes);
-            }
-
-            return new AudioFormat
-            {
-                FormatTag = formatTag,
-                BlockAlign = (ushort)Marshal.ReadInt16(format, 12),
-                SampleRate = Marshal.ReadInt32(format, 4),
-                Bits = bits,
-                ValidBits = validBits,
-                SubFormat = subFormat
-            };
-        }
-    }
 }

@@ -73,6 +73,11 @@ Then press `Start`.
 The status area shows captured and written frames. If captured frames stay at
 zero, the selected source device is not receiving the app/player audio.
 
+AudioMirror also reads the Windows mix format for the selected source and
+targets. If the two target formats differ, the app shows a warning. For cleaner
+sound, set both physical target devices to the same Windows format, for example
+`48000 Hz, 16 bit` or `48000 Hz, 24 bit`.
+
 ## PowerShell CLI
 
 The original script is still available for quick testing:

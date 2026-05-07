@@ -1,5 +1,7 @@
 namespace AudioMirrorApp;
 
+using System.Diagnostics;
+
 internal sealed class MainForm : Form
 {
     private readonly ComboBox sourceBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -14,6 +16,8 @@ internal sealed class MainForm : Form
     private readonly Button stopButton = new() { Text = "Stop", Enabled = false };
     private readonly Button saveButton = new() { Text = "Save" };
     private readonly Button startupButton = new() { Text = "Autostart" };
+    private readonly Button soundSettingsButton = new() { Text = "Sound settings" };
+    private readonly Label formatLabel = new() { AutoSize = false, Height = 82, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
     private readonly AppSettings settings;
@@ -56,7 +60,7 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 5,
             Padding = new Padding(14),
             AutoSize = false
         };
@@ -93,7 +97,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton]);
 
         var hint = new Label
         {
@@ -104,11 +108,14 @@ internal sealed class MainForm : Form
 
         statusLabel.BorderStyle = BorderStyle.FixedSingle;
         statusLabel.Padding = new Padding(8);
+        formatLabel.BorderStyle = BorderStyle.FixedSingle;
+        formatLabel.Padding = new Padding(8);
 
         root.Controls.Add(grid, 0, 0);
         root.Controls.Add(buttons, 0, 1);
         root.Controls.Add(hint, 0, 2);
-        root.Controls.Add(statusLabel, 0, 3);
+        root.Controls.Add(formatLabel, 0, 3);
+        root.Controls.Add(statusLabel, 0, 4);
         Controls.Add(root);
     }
 
@@ -137,6 +144,10 @@ internal sealed class MainForm : Form
         stopButton.Click += (_, _) => StopMirror();
         saveButton.Click += (_, _) => SaveSettingsFromControls();
         startupButton.Click += (_, _) => RegisterStartup();
+        soundSettingsButton.Click += (_, _) => OpenSoundSettings();
+        sourceBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
+        firstTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
+        secondTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         firstGainBox.ValueChanged += (_, _) => PushLiveSettings();
         secondGainBox.ValueChanged += (_, _) => PushLiveSettings();
         firstDelayBox.ValueChanged += (_, _) => PushLiveSettings();
@@ -151,6 +162,7 @@ internal sealed class MainForm : Form
         FillDeviceBox(firstTargetBox);
         FillDeviceBox(secondTargetBox);
         ApplySettingsToControls();
+        UpdateFormatWarning();
         statusLabel.Text = "Devices refreshed.";
     }
 
@@ -306,5 +318,53 @@ internal sealed class MainForm : Form
         {
             MessageBox.Show(this, ex.Message, "Autostart failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void UpdateFormatWarning()
+    {
+        try
+        {
+            if (sourceBox.SelectedItem is not AudioDeviceInfo source ||
+                firstTargetBox.SelectedItem is not AudioDeviceInfo firstTarget ||
+                secondTargetBox.SelectedItem is not AudioDeviceInfo secondTarget)
+            {
+                formatLabel.Text = "Select source and target devices to check formats.";
+                formatLabel.BackColor = SystemColors.Control;
+                return;
+            }
+
+            var sourceFormat = CoreAudio.GetMixFormat(source.Device);
+            var firstFormat = CoreAudio.GetMixFormat(firstTarget.Device);
+            var secondFormat = CoreAudio.GetMixFormat(secondTarget.Device);
+            var targetsMatch = firstFormat.Matches(secondFormat);
+            var allMatch = sourceFormat.Matches(firstFormat) && sourceFormat.Matches(secondFormat);
+
+            formatLabel.Text =
+                $"Source format:   {sourceFormat.DisplayName}{Environment.NewLine}" +
+                $"Target 1 format: {firstFormat.DisplayName}{Environment.NewLine}" +
+                $"Target 2 format: {secondFormat.DisplayName}{Environment.NewLine}" +
+                (allMatch
+                    ? "Formats match."
+                    : targetsMatch
+                        ? "Targets match, but source differs. Windows will resample from the source."
+                        : "Warning: target formats differ. Set both target devices to the same Windows format, preferably 48000 Hz 16/24 bit.");
+
+            formatLabel.BackColor = allMatch || targetsMatch
+                ? Color.FromArgb(232, 248, 238)
+                : Color.FromArgb(255, 244, 214);
+        }
+        catch (Exception ex)
+        {
+            formatLabel.Text = $"Could not read device formats: {ex.Message}";
+            formatLabel.BackColor = Color.FromArgb(255, 235, 235);
+        }
+    }
+
+    private static void OpenSoundSettings()
+    {
+        Process.Start(new ProcessStartInfo("ms-settings:sound")
+        {
+            UseShellExecute = true
+        });
     }
 }

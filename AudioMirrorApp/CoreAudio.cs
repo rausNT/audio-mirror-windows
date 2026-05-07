@@ -198,6 +198,24 @@ internal static class CoreAudio
         return (IAudioClient)audioClient;
     }
 
+    public static AudioFormatInfo GetMixFormat(IMMDevice device)
+    {
+        var client = ActivateAudioClient(device);
+        IntPtr format = IntPtr.Zero;
+        try
+        {
+            client.GetMixFormat(out format);
+            return AudioFormatInfo.FromPointer(format);
+        }
+        finally
+        {
+            if (format != IntPtr.Zero)
+            {
+                CoTaskMemFree(format);
+            }
+        }
+    }
+
     private static IMMDeviceEnumerator CreateDeviceEnumerator()
     {
         var type = Type.GetTypeFromCLSID(MMDeviceEnumeratorId, throwOnError: true)
