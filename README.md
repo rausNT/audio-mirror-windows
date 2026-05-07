@@ -66,6 +66,8 @@ Then press `Start`.
 - `Delay ms`: delay added to each target.
   - Try values like `0`, `60`, `75`, `90`, `105`, `120`.
   - If echo gets worse, put the delay on the other target.
+- Default gain is `1.0` for both targets and default delay is `0 ms` for both
+  targets.
 - `Save`: writes `settings.json` next to the app.
 - `Autostart`: registers the app in the current user's Windows startup and
   starts mirroring automatically using saved settings.
@@ -93,7 +95,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\AudioMirror.ps1 -List
 Mirror one source to two targets:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\AudioMirror.ps1 -SourceIndex 1 -TargetIndex 0 -SecondTargetIndex 2 -Gain 3 -SecondGain 3 -DelayMs 0 -SecondDelayMs 90 -DebugAudio
+powershell -NoProfile -ExecutionPolicy Bypass -File .\AudioMirror.ps1 -SourceIndex 1 -TargetIndex 0 -SecondTargetIndex 2 -Gain 1 -SecondGain 1 -DelayMs 0 -SecondDelayMs 0 -DebugAudio
 ```
 
 Stop with `Ctrl+C`.
