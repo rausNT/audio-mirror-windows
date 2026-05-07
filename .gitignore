@@ -1,0 +1,10 @@
+bin/
+obj/
+dist/
+logs/
+*.user
+settings.json
+.appdata/
+.localappdata/
+.dotnet-home/
+.nuget-packages/
