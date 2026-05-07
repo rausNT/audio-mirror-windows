@@ -7,6 +7,9 @@ internal sealed class MainForm : Form
     private readonly ComboBox sourceBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox firstTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox secondTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly Button sourceFormatButton = new() { Width = 18, Height = 18, FlatStyle = FlatStyle.Flat, TabStop = false };
+    private readonly Button firstFormatButton = new() { Width = 18, Height = 18, FlatStyle = FlatStyle.Flat, TabStop = false };
+    private readonly Button secondFormatButton = new() { Width = 18, Height = 18, FlatStyle = FlatStyle.Flat, TabStop = false };
     private readonly NumericUpDown firstGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown secondGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown firstDelayBox = new() { Minimum = 0, Maximum = 2000, Increment = 5, Width = 90 };
@@ -17,7 +20,8 @@ internal sealed class MainForm : Form
     private readonly Button saveButton = new() { Text = "Save" };
     private readonly Button startupButton = new() { Text = "Autostart" };
     private readonly Button soundSettingsButton = new() { Text = "Sound settings" };
-    private readonly Label formatLabel = new() { AutoSize = false, Height = 82, Dock = DockStyle.Fill };
+    private readonly Button syncButton = new() { Text = "Sync" };
+    private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
     private readonly AppSettings settings;
@@ -67,28 +71,31 @@ internal sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var grid = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 4,
+            ColumnCount = 5,
             RowCount = 4,
             AutoSize = true
         };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 87));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
 
-        AddRow(grid, 0, "Source", sourceBox, null, null);
-        AddRow(grid, 1, "Target 1", firstTargetBox, firstGainBox, firstDelayBox);
-        AddRow(grid, 2, "Target 2", secondTargetBox, secondGainBox, secondDelayBox);
+        AddRow(grid, 0, sourceFormatButton, "Source", sourceBox, null, null);
+        AddRow(grid, 1, firstFormatButton, "Target 1", firstTargetBox, firstGainBox, firstDelayBox);
+        AddRow(grid, 2, secondFormatButton, "Target 2", secondTargetBox, secondGainBox, secondDelayBox);
 
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 0, 3);
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 1, 3);
-        grid.Controls.Add(new Label { Text = "Gain", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft }, 2, 3);
-        grid.Controls.Add(new Label { Text = "Delay ms", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft }, 3, 3);
+        grid.Controls.Add(new Label { Text = "", AutoSize = true }, 2, 3);
+        grid.Controls.Add(new Label { Text = "Gain", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft }, 3, 3);
+        grid.Controls.Add(new Label { Text = "Delay ms", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft }, 4, 3);
 
         var buttons = new FlowLayoutPanel
         {
@@ -97,7 +104,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton]);
 
         var hint = new Label
         {
@@ -108,8 +115,7 @@ internal sealed class MainForm : Form
 
         statusLabel.BorderStyle = BorderStyle.FixedSingle;
         statusLabel.Padding = new Padding(8);
-        formatLabel.BorderStyle = BorderStyle.FixedSingle;
-        formatLabel.Padding = new Padding(8);
+        formatLabel.Padding = new Padding(4, 6, 4, 4);
 
         root.Controls.Add(grid, 0, 0);
         root.Controls.Add(buttons, 0, 1);
@@ -119,21 +125,24 @@ internal sealed class MainForm : Form
         Controls.Add(root);
     }
 
-    private static void AddRow(TableLayoutPanel grid, int row, string label, Control deviceControl, Control? gainControl, Control? delayControl)
+    private static void AddRow(TableLayoutPanel grid, int row, Button formatButton, string label, Control deviceControl, Control? gainControl, Control? delayControl)
     {
         grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) }, 0, row);
+        formatButton.Margin = new Padding(0, 5, 8, 0);
+        formatButton.FlatAppearance.BorderSize = 1;
+        grid.Controls.Add(formatButton, 0, row);
+        grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) }, 1, row);
         deviceControl.Dock = DockStyle.Fill;
-        grid.Controls.Add(deviceControl, 1, row);
+        grid.Controls.Add(deviceControl, 2, row);
 
         if (gainControl is not null)
         {
-            grid.Controls.Add(gainControl, 2, row);
+            grid.Controls.Add(gainControl, 3, row);
         }
 
         if (delayControl is not null)
         {
-            grid.Controls.Add(delayControl, 3, row);
+            grid.Controls.Add(delayControl, 4, row);
         }
     }
 
@@ -145,6 +154,10 @@ internal sealed class MainForm : Form
         saveButton.Click += (_, _) => SaveSettingsFromControls();
         startupButton.Click += (_, _) => RegisterStartup();
         soundSettingsButton.Click += (_, _) => OpenSoundSettings();
+        syncButton.Click += (_, _) => SyncAppSettings();
+        sourceFormatButton.Click += (_, _) => OpenSoundSettings();
+        firstFormatButton.Click += (_, _) => OpenSoundSettings();
+        secondFormatButton.Click += (_, _) => OpenSoundSettings();
         sourceBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         firstTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         secondTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
@@ -338,26 +351,47 @@ internal sealed class MainForm : Form
             var secondFormat = CoreAudio.GetMixFormat(secondTarget.Device);
             var targetsMatch = firstFormat.Matches(secondFormat);
             var allMatch = sourceFormat.Matches(firstFormat) && sourceFormat.Matches(secondFormat);
+            var sourceMatchesTargets = sourceFormat.Matches(firstFormat) || sourceFormat.Matches(secondFormat);
+
+            SetFormatButton(sourceFormatButton, sourceMatchesTargets || allMatch, $"Source: {sourceFormat.DisplayName}");
+            SetFormatButton(firstFormatButton, firstFormat.Matches(sourceFormat) && targetsMatch, $"Target 1: {firstFormat.DisplayName}");
+            SetFormatButton(secondFormatButton, secondFormat.Matches(sourceFormat) && targetsMatch, $"Target 2: {secondFormat.DisplayName}");
 
             formatLabel.Text =
-                $"Source format:   {sourceFormat.DisplayName}{Environment.NewLine}" +
-                $"Target 1 format: {firstFormat.DisplayName}{Environment.NewLine}" +
-                $"Target 2 format: {secondFormat.DisplayName}{Environment.NewLine}" +
                 (allMatch
-                    ? "Formats match."
+                    ? $"Formats match: {sourceFormat.DisplayName}"
                     : targetsMatch
-                        ? "Targets match, but source differs. Windows will resample from the source."
-                        : "Warning: target formats differ. Set both target devices to the same Windows format, preferably 48000 Hz 16/24 bit.");
+                        ? $"Targets match: {firstFormat.DisplayName}. Source differs: {sourceFormat.DisplayName}; Windows will resample."
+                        : $"Target formats differ. T1 {firstFormat.DisplayName}; T2 {secondFormat.DisplayName}. Set both targets to 48000 Hz 16/24 bit.");
 
-            formatLabel.BackColor = allMatch || targetsMatch
-                ? Color.FromArgb(232, 248, 238)
-                : Color.FromArgb(255, 244, 214);
+            formatLabel.BackColor = SystemColors.Control;
+            formatLabel.ForeColor = allMatch || targetsMatch ? Color.FromArgb(20, 110, 45) : Color.FromArgb(160, 95, 0);
         }
         catch (Exception ex)
         {
+            SetFormatButton(sourceFormatButton, false, "Could not read format");
+            SetFormatButton(firstFormatButton, false, "Could not read format");
+            SetFormatButton(secondFormatButton, false, "Could not read format");
             formatLabel.Text = $"Could not read device formats: {ex.Message}";
-            formatLabel.BackColor = Color.FromArgb(255, 235, 235);
+            formatLabel.BackColor = SystemColors.Control;
+            formatLabel.ForeColor = Color.FromArgb(170, 40, 40);
         }
+    }
+
+    private static void SetFormatButton(Button button, bool ok, string tooltipText)
+    {
+        button.BackColor = ok ? Color.FromArgb(45, 170, 80) : Color.FromArgb(230, 175, 45);
+        button.Text = "";
+        ToolTipProvider.SetToolTip(button, tooltipText + ". Click to open Windows sound settings.");
+    }
+
+    private void SyncAppSettings()
+    {
+        firstGainBox.Value = Math.Min(firstGainBox.Value, 1.0M);
+        secondGainBox.Value = Math.Min(secondGainBox.Value, 1.0M);
+        PushLiveSettings();
+        UpdateFormatWarning();
+        statusLabel.Text = "App sync applied: both targets use the source stream format internally. Change Windows device formats manually if the format lights are still amber.";
     }
 
     private static void OpenSoundSettings()
@@ -367,4 +401,6 @@ internal sealed class MainForm : Form
             UseShellExecute = true
         });
     }
+
+    private static readonly ToolTip ToolTipProvider = new();
 }

@@ -31,6 +31,11 @@ internal sealed class AudioFormatInfo
                (FormatTag == other.FormatTag || SubFormat == other.SubFormat);
     }
 
+    public bool NeedsConversionFrom(AudioFormatInfo source)
+    {
+        return !Matches(source);
+    }
+
     public static AudioFormatInfo FromPointer(IntPtr format)
     {
         var formatTag = (ushort)Marshal.ReadInt16(format, 0);
