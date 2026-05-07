@@ -1,6 +1,8 @@
 bin/
 obj/
 dist/
+release-build/
+*.zip
 logs/
 *.user
 settings.json
