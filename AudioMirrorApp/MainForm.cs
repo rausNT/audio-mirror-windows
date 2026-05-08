@@ -22,6 +22,8 @@ internal sealed class MainForm : Form
     private readonly Button soundSettingsButton = new() { Text = "Sound settings" };
     private readonly Button syncButton = new() { Text = "Sync" };
     private readonly Button testButton = new() { Text = "Test" };
+    private readonly Button helpButton = new() { Text = "Help" };
+    private readonly Button aboutButton = new() { Text = "About" };
     private readonly CheckBox splitLeftRightBox = new() { Text = "Split L/R", AutoSize = true };
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
@@ -107,7 +109,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, splitLeftRightBox]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, helpButton, aboutButton, splitLeftRightBox]);
 
         var hint = new Label
         {
@@ -159,6 +161,8 @@ internal sealed class MainForm : Form
         soundSettingsButton.Click += (_, _) => OpenSoundSettings();
         syncButton.Click += (_, _) => SyncAppSettings();
         testButton.Click += (_, _) => OpenTestWindow();
+        helpButton.Click += (_, _) => ShowHelp();
+        aboutButton.Click += (_, _) => ShowAbout();
         sourceFormatButton.Click += (_, _) => OpenSoundSettings();
         firstFormatButton.Click += (_, _) => OpenSoundSettings();
         secondFormatButton.Click += (_, _) => OpenSoundSettings();
@@ -422,6 +426,82 @@ internal sealed class MainForm : Form
         {
             MessageBox.Show(this, ex.Message, "Test failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void ShowHelp()
+    {
+        using var form = new InfoForm(
+            "AudioMirror Help",
+            "Help",
+            """
+            Quick setup
+
+            1. In Windows sound settings, choose a silent or unused playback device as the default output. Realtek Digital Output is often a good source.
+            2. Restart the browser or player if captured frames stay at 0.
+            3. In AudioMirror, choose that device as Source.
+            4. Choose the two real speakers or monitors as Target 1 and Target 2.
+            5. Press Start.
+
+            Controls
+
+            Gain
+            Volume multiplier for each target. 1.0 means unchanged. Start with 1.0 and raise Windows or monitor volume first. High gain can distort.
+
+            Delay ms
+            Adds delay to a target. Use it to reduce echo between two devices. Start at 0/0, then try small steps. If echo gets worse, put delay on the other target.
+
+            Split L/R
+            Sends the source left channel to Target 1 as dual-mono and the source right channel to Target 2 as dual-mono. Turn it off for normal stereo mirroring.
+
+            Format lights
+            Green means the selected device format is aligned with the current setup. Amber means there may be resampling or mismatched target formats. Click a light to open Windows sound settings.
+
+            Sync
+            Applies safe app-side defaults. It does not change Windows driver settings.
+
+            Test
+            Opens a built-in speaker test. Left plays Target 1, Right plays Target 2, Both plays both targets, and Loop cycles through them.
+
+            Save
+            Writes settings.json next to the app.
+
+            Autostart
+            Registers AudioMirror in the current user's Windows startup and starts mirroring automatically with saved settings.
+
+            Troubleshooting
+
+            If captured frames stay at 0, the selected Source is not receiving audio. Set it as the Windows default output and restart the player.
+
+            If sound is metallic, set both physical targets to the same Windows format, for example 48000 Hz, 16 bit or 24 bit, and disable audio enhancements/spatial sound.
+
+            If one target is silent, use Test first. If Test is also silent, check the target device volume, monitor audio source, mute state, and cable/input.
+            """);
+        form.ShowDialog(this);
+    }
+
+    private void ShowAbout()
+    {
+        using var form = new InfoForm(
+            "About AudioMirror",
+            "AudioMirror",
+            """
+            AudioMirror
+
+            A small Windows WASAPI utility for mirroring one playback stream to two output devices with per-target gain, delay, channel split, and built-in speaker testing.
+
+            Copyright (c) 2026 AudioMirror contributors
+
+            Repository
+            https://github.com/rausNT/audio-mirror-windows
+
+            License
+            MIT License
+
+            Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, subject to the license terms.
+
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+            """);
+        form.ShowDialog(this);
     }
 
     private static readonly ToolTip ToolTipProvider = new();

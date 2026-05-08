@@ -77,6 +77,8 @@ Then press `Start`.
 - `Test`: opens a built-in speaker test with `Left`, `Right`, `Both`, and
   `Loop`. It plays directly to the selected targets and animates the active
   speaker.
+- `Help`: opens the built-in user guide.
+- `About`: shows the app name, repository, copyright, and MIT license summary.
 
 The status area shows captured and written frames. If captured frames stay at
 zero, the selected source device is not receiving the app/player audio.
