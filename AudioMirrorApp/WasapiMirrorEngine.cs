@@ -4,6 +4,13 @@ namespace AudioMirrorApp;
 
 internal sealed class WasapiMirrorEngine : IDisposable
 {
+    private enum ChannelMode
+    {
+        Stereo,
+        LeftToMono,
+        RightToMono
+    }
+
     private sealed class DelayBuffer
     {
         private readonly byte[] buffer;
@@ -38,6 +45,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         private readonly uint bufferFrames;
         private readonly ushort blockAlign;
         private readonly int sampleRate;
+        private readonly int channels;
         private readonly int bits;
         private readonly int validBits;
         private readonly ushort formatTag;
@@ -46,6 +54,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         private DelayBuffer? delayBuffer;
         private double gain;
         private int delayMs;
+        private ChannelMode channelMode;
 
         public RenderSink(
             AudioDeviceInfo device,
@@ -53,21 +62,24 @@ internal sealed class WasapiMirrorEngine : IDisposable
             long bufferDuration,
             ushort blockAlign,
             int sampleRate,
+            int channels,
             int bits,
             int validBits,
             ushort formatTag,
             Guid subFormat,
             double gain,
-            int delayMs)
+            int delayMs,
+            ChannelMode channelMode)
         {
             Name = device.Name;
             this.blockAlign = blockAlign;
             this.sampleRate = sampleRate;
+            this.channels = channels;
             this.bits = bits;
             this.validBits = validBits;
             this.formatTag = formatTag;
             this.subFormat = subFormat;
-            SetSettings(gain, delayMs);
+            SetSettings(gain, delayMs, channelMode);
 
             audioClient = CoreAudio.ActivateAudioClient(device.Device);
             var session = Guid.Empty;
@@ -90,7 +102,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         public long WrittenFrames { get; private set; }
         public long DroppedFrames { get; private set; }
 
-        public void SetSettings(double newGain, int newDelayMs)
+        public void SetSettings(double newGain, int newDelayMs, ChannelMode newChannelMode)
         {
             if (newGain <= 0 || newGain > 8)
             {
@@ -105,6 +117,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
             lock (settingsLock)
             {
                 gain = newGain;
+                channelMode = newChannelMode;
                 if (delayMs != newDelayMs)
                 {
                     delayMs = newDelayMs;
@@ -170,6 +183,11 @@ internal sealed class WasapiMirrorEngine : IDisposable
                     ApplyGain(transfer, bytes, gain, bits, validBits, formatTag, subFormat);
                 }
 
+                if (channelMode != ChannelMode.Stereo)
+                {
+                    ApplyChannelMode(transfer, (int)framesToWrite, channels, bits, validBits, formatTag, subFormat, channelMode);
+                }
+
                 delayBuffer?.Process(transfer, bytes);
             }
 
@@ -219,6 +237,69 @@ internal sealed class WasapiMirrorEngine : IDisposable
                 }
             }
         }
+
+        private static void ApplyChannelMode(byte[] data, int frames, int channels, int bits, int validBits, ushort formatTag, Guid subFormat, ChannelMode mode)
+        {
+            if (channels < 2)
+            {
+                return;
+            }
+
+            var sourceChannel = mode == ChannelMode.RightToMono ? 1 : 0;
+            var isFloat = formatTag == 3 || subFormat == CoreAudio.IeeeFloatSubFormat;
+            var isPcm = formatTag == 1 || subFormat == CoreAudio.PcmSubFormat;
+            var bytesPerSample = bits / 8;
+
+            if (isFloat && bits == 32)
+            {
+                for (var frame = 0; frame < frames; frame++)
+                {
+                    var frameOffset = frame * channels * bytesPerSample;
+                    var sourceOffset = frameOffset + sourceChannel * bytesPerSample;
+                    var value = BitConverter.ToSingle(data, sourceOffset);
+                    var raw = BitConverter.GetBytes(value);
+                    for (var channel = 0; channel < channels; channel++)
+                    {
+                        Buffer.BlockCopy(raw, 0, data, frameOffset + channel * bytesPerSample, bytesPerSample);
+                    }
+                }
+
+                return;
+            }
+
+            if (isPcm && bits == 16)
+            {
+                for (var frame = 0; frame < frames; frame++)
+                {
+                    var frameOffset = frame * channels * bytesPerSample;
+                    var sourceOffset = frameOffset + sourceChannel * bytesPerSample;
+                    var value0 = data[sourceOffset];
+                    var value1 = data[sourceOffset + 1];
+                    for (var channel = 0; channel < channels; channel++)
+                    {
+                        var offset = frameOffset + channel * bytesPerSample;
+                        data[offset] = value0;
+                        data[offset + 1] = value1;
+                    }
+                }
+
+                return;
+            }
+
+            if (isPcm && (bits == 24 || bits == 32 && validBits <= 24))
+            {
+                for (var frame = 0; frame < frames; frame++)
+                {
+                    var frameOffset = frame * channels * bytesPerSample;
+                    var sourceOffset = frameOffset + sourceChannel * bytesPerSample;
+                    for (var channel = 0; channel < channels; channel++)
+                    {
+                        var offset = frameOffset + channel * bytesPerSample;
+                        Buffer.BlockCopy(data, sourceOffset, data, offset, bytesPerSample);
+                    }
+                }
+            }
+        }
     }
 
     private readonly CancellationTokenSource cancellation = new();
@@ -236,7 +317,8 @@ internal sealed class WasapiMirrorEngine : IDisposable
         double firstGain,
         double secondGain,
         int firstDelayMs,
-        int secondDelayMs)
+        int secondDelayMs,
+        bool splitLeftRight)
     {
         if (source.Id == firstTarget.Id || source.Id == secondTarget.Id || firstTarget.Id == secondTarget.Id)
         {
@@ -267,12 +349,14 @@ internal sealed class WasapiMirrorEngine : IDisposable
             bufferDuration,
             Format.BlockAlign,
             Format.SampleRate,
+            Format.Channels,
             Format.Bits,
             Format.ValidBits,
             Format.FormatTag,
             Format.SubFormat,
             firstGain,
-            firstDelayMs);
+            firstDelayMs,
+            splitLeftRight ? ChannelMode.LeftToMono : ChannelMode.Stereo);
 
         secondSink = new RenderSink(
             secondTarget,
@@ -280,12 +364,14 @@ internal sealed class WasapiMirrorEngine : IDisposable
             bufferDuration,
             Format.BlockAlign,
             Format.SampleRate,
+            Format.Channels,
             Format.Bits,
             Format.ValidBits,
             Format.FormatTag,
             Format.SubFormat,
             secondGain,
-            secondDelayMs);
+            secondDelayMs,
+            splitLeftRight ? ChannelMode.RightToMono : ChannelMode.Stereo);
 
         var captureServiceId = CoreAudio.IAudioCaptureClientId;
         captureAudioClient.GetService(ref captureServiceId, out var service);
@@ -310,10 +396,10 @@ internal sealed class WasapiMirrorEngine : IDisposable
     public long SecondDroppedFrames => secondSink.DroppedFrames;
     public Exception? LastError { get; private set; }
 
-    public void UpdateSettings(double firstGain, double secondGain, int firstDelayMs, int secondDelayMs)
+    public void UpdateSettings(double firstGain, double secondGain, int firstDelayMs, int secondDelayMs, bool splitLeftRight)
     {
-        firstSink.SetSettings(firstGain, firstDelayMs);
-        secondSink.SetSettings(secondGain, secondDelayMs);
+        firstSink.SetSettings(firstGain, firstDelayMs, splitLeftRight ? ChannelMode.LeftToMono : ChannelMode.Stereo);
+        secondSink.SetSettings(secondGain, secondDelayMs, splitLeftRight ? ChannelMode.RightToMono : ChannelMode.Stereo);
     }
 
     public void Dispose()

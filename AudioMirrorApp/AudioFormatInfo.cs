@@ -5,6 +5,7 @@ namespace AudioMirrorApp;
 internal sealed class AudioFormatInfo
 {
     public required ushort FormatTag { get; init; }
+    public required int Channels { get; init; }
     public required ushort BlockAlign { get; init; }
     public required int SampleRate { get; init; }
     public required int Bits { get; init; }
@@ -19,7 +20,7 @@ internal sealed class AudioFormatInfo
                 ? "float"
                 : "PCM";
             var shownBits = ValidBits > 0 && ValidBits < Bits ? $"{ValidBits}/{Bits}" : Bits.ToString();
-            return $"{SampleRate} Hz, {shownBits} bit, {type}";
+            return $"{SampleRate} Hz, {Channels} ch, {shownBits} bit, {type}";
         }
     }
 
@@ -28,6 +29,7 @@ internal sealed class AudioFormatInfo
         return SampleRate == other.SampleRate &&
                Bits == other.Bits &&
                ValidBits == other.ValidBits &&
+               Channels == other.Channels &&
                (FormatTag == other.FormatTag || SubFormat == other.SubFormat);
     }
 
@@ -54,6 +56,7 @@ internal sealed class AudioFormatInfo
         return new AudioFormatInfo
         {
             FormatTag = formatTag,
+            Channels = Marshal.ReadInt16(format, 2),
             BlockAlign = (ushort)Marshal.ReadInt16(format, 12),
             SampleRate = Marshal.ReadInt32(format, 4),
             Bits = bits,

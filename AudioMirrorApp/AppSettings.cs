@@ -9,4 +9,5 @@ internal sealed class AppSettings
     public double SecondGain { get; set; } = 1.0;
     public int FirstDelayMs { get; set; } = 0;
     public int SecondDelayMs { get; set; } = 0;
+    public bool SplitLeftRight { get; set; } = false;
 }

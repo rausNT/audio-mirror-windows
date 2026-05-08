@@ -21,6 +21,7 @@ internal sealed class MainForm : Form
     private readonly Button startupButton = new() { Text = "Autostart" };
     private readonly Button soundSettingsButton = new() { Text = "Sound settings" };
     private readonly Button syncButton = new() { Text = "Sync" };
+    private readonly CheckBox splitLeftRightBox = new() { Text = "Split L/R", AutoSize = true };
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
@@ -105,7 +106,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, splitLeftRightBox]);
 
         var hint = new Label
         {
@@ -166,6 +167,7 @@ internal sealed class MainForm : Form
         secondGainBox.ValueChanged += (_, _) => PushLiveSettings();
         firstDelayBox.ValueChanged += (_, _) => PushLiveSettings();
         secondDelayBox.ValueChanged += (_, _) => PushLiveSettings();
+        splitLeftRightBox.CheckedChanged += (_, _) => PushLiveSettings();
         statsTimer.Tick += (_, _) => UpdateStatus();
     }
 
@@ -198,6 +200,7 @@ internal sealed class MainForm : Form
         secondGainBox.Value = ClampDecimal((decimal)settings.SecondGain, secondGainBox.Minimum, secondGainBox.Maximum);
         firstDelayBox.Value = ClampDecimal(settings.FirstDelayMs, firstDelayBox.Minimum, firstDelayBox.Maximum);
         secondDelayBox.Value = ClampDecimal(settings.SecondDelayMs, secondDelayBox.Minimum, secondDelayBox.Maximum);
+        splitLeftRightBox.Checked = settings.SplitLeftRight;
     }
 
     private static decimal ClampDecimal(decimal value, decimal minimum, decimal maximum)
@@ -237,7 +240,8 @@ internal sealed class MainForm : Form
                 (double)firstGainBox.Value,
                 (double)secondGainBox.Value,
                 (int)firstDelayBox.Value,
-                (int)secondDelayBox.Value);
+                (int)secondDelayBox.Value,
+                splitLeftRightBox.Checked);
 
             startButton.Enabled = false;
             stopButton.Enabled = true;
@@ -267,7 +271,8 @@ internal sealed class MainForm : Form
             (double)firstGainBox.Value,
             (double)secondGainBox.Value,
             (int)firstDelayBox.Value,
-            (int)secondDelayBox.Value);
+            (int)secondDelayBox.Value,
+            splitLeftRightBox.Checked);
     }
 
     private void SaveSettingsFromControls()
@@ -287,7 +292,8 @@ internal sealed class MainForm : Form
             FirstGain = (double)firstGainBox.Value,
             SecondGain = (double)secondGainBox.Value,
             FirstDelayMs = (int)firstDelayBox.Value,
-            SecondDelayMs = (int)secondDelayBox.Value
+            SecondDelayMs = (int)secondDelayBox.Value,
+            SplitLeftRight = splitLeftRightBox.Checked
         };
     }
 
@@ -312,7 +318,7 @@ internal sealed class MainForm : Form
         var error = engine.LastError is null ? "" : $"{Environment.NewLine}Error: {engine.LastError.Message}";
         statusLabel.Text =
             $"Running: {engine.SourceName} -> {engine.FirstTargetName}, {engine.SecondTargetName}{Environment.NewLine}" +
-            $"Format: {engine.Format.SampleRate} Hz, {engine.Format.Bits} bit{Environment.NewLine}" +
+            $"Format: {engine.Format.SampleRate} Hz, {engine.Format.Channels} ch, {engine.Format.Bits} bit. Mode: {(splitLeftRightBox.Checked ? "Split L/R" : "Stereo mirror")}{Environment.NewLine}" +
             $"Packets {engine.Packets}, captured {engine.CapturedFrames}, T1 written {engine.FirstWrittenFrames}, dropped {engine.FirstDroppedFrames}, T2 written {engine.SecondWrittenFrames}, dropped {engine.SecondDroppedFrames}" +
             error;
     }

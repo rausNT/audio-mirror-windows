@@ -66,6 +66,9 @@ Then press `Start`.
 - `Delay ms`: delay added to each target.
   - Try values like `0`, `60`, `75`, `90`, `105`, `120`.
   - If echo gets worse, put the delay on the other target.
+- `Split L/R`: sends the source left channel to `Target 1` as dual-mono and
+  the source right channel to `Target 2` as dual-mono. Turn it off for normal
+  stereo mirroring.
 - Default gain is `1.0` for both targets and default delay is `0 ms` for both
   targets.
 - `Save`: writes `settings.json` next to the app.
