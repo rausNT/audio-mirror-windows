@@ -30,6 +30,7 @@ internal static class Program
             }
 
             var installDir = GetInstallDir();
+            StopRunningAudioMirror(installDir);
             Directory.CreateDirectory(installDir);
             ExtractPayload(installDir);
             WriteUninstaller(installDir);
@@ -64,6 +65,72 @@ internal static class Program
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return Path.Combine(localAppData, "Programs", "AudioMirror");
+    }
+
+    private static void StopRunningAudioMirror(string installDir)
+    {
+        var processes = Process.GetProcessesByName("AudioMirrorApp");
+        foreach (var process in processes)
+        {
+            using (process)
+            {
+                try
+                {
+                    var processPath = process.MainModule?.FileName ?? string.Empty;
+                    var sameInstall = processPath.StartsWith(installDir, StringComparison.OrdinalIgnoreCase);
+                    if (!sameInstall && !string.IsNullOrEmpty(processPath))
+                    {
+                        continue;
+                    }
+
+                    process.CloseMainWindow();
+                    if (!process.WaitForExit(2500))
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit(5000);
+                    }
+                }
+                catch
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit(5000);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+
+        WaitForFileRelease(Path.Combine(installDir, "AudioMirrorApp.dll"));
+        WaitForFileRelease(Path.Combine(installDir, "AudioMirrorApp.exe"));
+    }
+
+    private static void WaitForFileRelease(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        for (var i = 0; i < 20; i++)
+        {
+            try
+            {
+                using var stream = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                return;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(250);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Thread.Sleep(250);
+            }
+        }
     }
 
     private static void ExtractPayload(string installDir)
