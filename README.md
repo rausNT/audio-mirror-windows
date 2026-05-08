@@ -98,9 +98,11 @@ targets. If the two target formats differ, the app shows a warning. For cleaner
 sound, set both physical target devices to the same Windows format, for example
 `48000 Hz, 16 bit` or `48000 Hz, 24 bit`.
 
-The small format lights next to each device act as status indicators. Click one
-to open Windows sound settings. `Sync` applies the app-side safe defaults
-without changing Windows driver settings.
+The small meters next to each device show live signal level while mirroring is
+running. Their border color also acts as the format status: green means aligned,
+amber means possible resampling or target mismatch. Click a meter to open
+Windows sound settings. `Sync` applies the app-side safe defaults without
+changing Windows driver settings.
 
 ## PowerShell CLI
 

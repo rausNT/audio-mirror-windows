@@ -55,6 +55,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         private double gain;
         private int delayMs;
         private ChannelMode channelMode;
+        private float level;
 
         public RenderSink(
             AudioDeviceInfo device,
@@ -101,6 +102,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         public string Name { get; }
         public long WrittenFrames { get; private set; }
         public long DroppedFrames { get; private set; }
+        public float Level => level;
 
         public void SetSettings(double newGain, int newDelayMs, ChannelMode newChannelMode)
         {
@@ -189,11 +191,17 @@ internal sealed class WasapiMirrorEngine : IDisposable
                 }
 
                 delayBuffer?.Process(transfer, bytes);
+                level = SmoothLevel(level, CalculatePeak(transfer, bytes, bits, validBits, formatTag, subFormat));
             }
 
             Marshal.Copy(transfer, 0, targetBuffer, bytes);
             renderClient.ReleaseBuffer(framesToWrite, CoreAudio.BufferFlags.None);
             WrittenFrames += framesToWrite;
+        }
+
+        public void DecayLevel()
+        {
+            level *= 0.82f;
         }
 
         private static void ApplyGain(byte[] data, int bytes, double gain, int bits, int validBits, ushort formatTag, Guid subFormat)
@@ -394,6 +402,9 @@ internal sealed class WasapiMirrorEngine : IDisposable
     public long FirstDroppedFrames => firstSink.DroppedFrames;
     public long SecondWrittenFrames => secondSink.WrittenFrames;
     public long SecondDroppedFrames => secondSink.DroppedFrames;
+    public float SourceLevel { get; private set; }
+    public float FirstLevel => firstSink.Level;
+    public float SecondLevel => secondSink.Level;
     public Exception? LastError { get; private set; }
 
     public void UpdateSettings(double firstGain, double secondGain, int firstDelayMs, int secondDelayMs, bool splitLeftRight)
@@ -450,17 +461,86 @@ internal sealed class WasapiMirrorEngine : IDisposable
                     captureClient.GetBuffer(out var sourceBuffer, out var frames, out var flags, out _, out _);
                     Packets++;
                     CapturedFrames += frames;
+                    SourceLevel = (flags & CoreAudio.BufferFlags.Silent) != 0
+                        ? SourceLevel * 0.82f
+                        : SmoothLevel(SourceLevel, CalculatePeak(sourceBuffer, (int)(frames * Format.BlockAlign), Format.Bits, Format.ValidBits, Format.FormatTag, Format.SubFormat));
                     firstSink.Write(sourceBuffer, frames, flags);
                     secondSink.Write(sourceBuffer, frames, flags);
                     captureClient.ReleaseBuffer(frames);
                     captureClient.GetNextPacketSize(out packetFrames);
                 }
+
+                SourceLevel *= 0.96f;
+                firstSink.DecayLevel();
+                secondSink.DecayLevel();
             }
         }
         catch (Exception ex)
         {
             LastError = ex;
         }
+    }
+
+    private static float SmoothLevel(float previous, float current)
+    {
+        return Math.Max(current, previous * 0.82f);
+    }
+
+    private static float CalculatePeak(IntPtr data, int bytes, int bits, int validBits, ushort formatTag, Guid subFormat)
+    {
+        if (bytes <= 0)
+        {
+            return 0f;
+        }
+
+        var buffer = new byte[bytes];
+        Marshal.Copy(data, buffer, 0, bytes);
+        return CalculatePeak(buffer, bytes, bits, validBits, formatTag, subFormat);
+    }
+
+    private static float CalculatePeak(byte[] data, int bytes, int bits, int validBits, ushort formatTag, Guid subFormat)
+    {
+        var isFloat = formatTag == 3 || subFormat == CoreAudio.IeeeFloatSubFormat;
+        var isPcm = formatTag == 1 || subFormat == CoreAudio.PcmSubFormat;
+        var peak = 0f;
+
+        if (isFloat && bits == 32)
+        {
+            for (var i = 0; i + 3 < bytes; i += 4)
+            {
+                peak = Math.Max(peak, Math.Abs(BitConverter.ToSingle(data, i)));
+            }
+        }
+        else if (isPcm && bits == 16)
+        {
+            for (var i = 0; i + 1 < bytes; i += 2)
+            {
+                peak = Math.Max(peak, Math.Abs(BitConverter.ToInt16(data, i) / (float)short.MaxValue));
+            }
+        }
+        else if (isPcm && bits == 24)
+        {
+            for (var i = 0; i + 2 < bytes; i += 3)
+            {
+                var value = data[i] | (data[i + 1] << 8) | (data[i + 2] << 16);
+                if ((value & 0x800000) != 0)
+                {
+                    value |= unchecked((int)0xFF000000);
+                }
+
+                peak = Math.Max(peak, Math.Abs(value / 8_388_607f));
+            }
+        }
+        else if (isPcm && bits == 32 && validBits <= 24)
+        {
+            for (var i = 0; i + 3 < bytes; i += 4)
+            {
+                var value = BitConverter.ToInt32(data, i) >> 8;
+                peak = Math.Max(peak, Math.Abs(value / 8_388_607f));
+            }
+        }
+
+        return Math.Clamp(peak, 0f, 1f);
     }
 
 }

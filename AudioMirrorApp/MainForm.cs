@@ -7,9 +7,9 @@ internal sealed class MainForm : Form
     private readonly ComboBox sourceBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox firstTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox secondTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly Button sourceFormatButton = new() { Width = 18, Height = 18, FlatStyle = FlatStyle.Flat, TabStop = false };
-    private readonly Button firstFormatButton = new() { Width = 18, Height = 18, FlatStyle = FlatStyle.Flat, TabStop = false };
-    private readonly Button secondFormatButton = new() { Width = 18, Height = 18, FlatStyle = FlatStyle.Flat, TabStop = false };
+    private readonly LevelMeter sourceMeter = new();
+    private readonly LevelMeter firstMeter = new();
+    private readonly LevelMeter secondMeter = new();
     private readonly NumericUpDown firstGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown secondGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown firstDelayBox = new() { Minimum = 0, Maximum = 2000, Increment = 5, Width = 90 };
@@ -127,9 +127,9 @@ internal sealed class MainForm : Form
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
 
-        AddRow(grid, 0, sourceFormatButton, "Source", sourceBox, null, null);
-        AddRow(grid, 1, firstFormatButton, "Target 1", firstTargetBox, firstGainBox, firstDelayBox);
-        AddRow(grid, 2, secondFormatButton, "Target 2", secondTargetBox, secondGainBox, secondDelayBox);
+        AddRow(grid, 0, sourceMeter, "Source", sourceBox, null, null);
+        AddRow(grid, 1, firstMeter, "Target 1", firstTargetBox, firstGainBox, firstDelayBox);
+        AddRow(grid, 2, secondMeter, "Target 2", secondTargetBox, secondGainBox, secondDelayBox);
 
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 0, 3);
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 1, 3);
@@ -216,12 +216,11 @@ internal sealed class MainForm : Form
         notifyIcon.Visible = true;
     }
 
-    private static void AddRow(TableLayoutPanel grid, int row, Button formatButton, string label, Control deviceControl, Control? gainControl, Control? delayControl)
+    private static void AddRow(TableLayoutPanel grid, int row, LevelMeter meter, string label, Control deviceControl, Control? gainControl, Control? delayControl)
     {
         grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        formatButton.Margin = new Padding(0, 5, 8, 0);
-        formatButton.FlatAppearance.BorderSize = 1;
-        grid.Controls.Add(formatButton, 0, row);
+        meter.Margin = new Padding(0, 5, 6, 0);
+        grid.Controls.Add(meter, 0, row);
         grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) }, 1, row);
         deviceControl.Dock = DockStyle.Fill;
         grid.Controls.Add(deviceControl, 2, row);
@@ -273,9 +272,9 @@ internal sealed class MainForm : Form
         trayHelpItem.Click += (_, _) => ShowHelp();
         trayExitItem.Click += (_, _) => ExitApplication();
         notifyIcon.DoubleClick += (_, _) => ShowMainWindow();
-        sourceFormatButton.Click += (_, _) => OpenSoundSettings();
-        firstFormatButton.Click += (_, _) => OpenSoundSettings();
-        secondFormatButton.Click += (_, _) => OpenSoundSettings();
+        sourceMeter.Click += (_, _) => OpenSoundSettings();
+        firstMeter.Click += (_, _) => OpenSoundSettings();
+        secondMeter.Click += (_, _) => OpenSoundSettings();
         sourceBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         firstTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         secondTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
@@ -455,6 +454,9 @@ internal sealed class MainForm : Form
             $"Format: {engine.Format.SampleRate} Hz, {engine.Format.Channels} ch, {engine.Format.Bits} bit. Mode: {(splitLeftRightBox.Checked ? "Split L/R" : "Stereo mirror")}{Environment.NewLine}" +
             $"Packets {engine.Packets}, captured {engine.CapturedFrames}, T1 written {engine.FirstWrittenFrames}, dropped {engine.FirstDroppedFrames}, T2 written {engine.SecondWrittenFrames}, dropped {engine.SecondDroppedFrames}" +
             error;
+        sourceMeter.Level = engine.SourceLevel;
+        firstMeter.Level = engine.FirstLevel;
+        secondMeter.Level = engine.SecondLevel;
     }
 
     private void RegisterStartup()
@@ -506,9 +508,9 @@ internal sealed class MainForm : Form
             var allMatch = sourceFormat.Matches(firstFormat) && sourceFormat.Matches(secondFormat);
             var sourceMatchesTargets = sourceFormat.Matches(firstFormat) || sourceFormat.Matches(secondFormat);
 
-            SetFormatButton(sourceFormatButton, sourceMatchesTargets || allMatch, $"Source: {sourceFormat.DisplayName}");
-            SetFormatButton(firstFormatButton, firstFormat.Matches(sourceFormat) && targetsMatch, $"Target 1: {firstFormat.DisplayName}");
-            SetFormatButton(secondFormatButton, secondFormat.Matches(sourceFormat) && targetsMatch, $"Target 2: {secondFormat.DisplayName}");
+            SetFormatMeter(sourceMeter, sourceMatchesTargets || allMatch, $"Source: {sourceFormat.DisplayName}");
+            SetFormatMeter(firstMeter, firstFormat.Matches(sourceFormat) && targetsMatch, $"Target 1: {firstFormat.DisplayName}");
+            SetFormatMeter(secondMeter, secondFormat.Matches(sourceFormat) && targetsMatch, $"Target 2: {secondFormat.DisplayName}");
 
             formatLabel.Text =
                 (allMatch
@@ -522,20 +524,19 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            SetFormatButton(sourceFormatButton, false, "Could not read format");
-            SetFormatButton(firstFormatButton, false, "Could not read format");
-            SetFormatButton(secondFormatButton, false, "Could not read format");
+            SetFormatMeter(sourceMeter, false, "Could not read format");
+            SetFormatMeter(firstMeter, false, "Could not read format");
+            SetFormatMeter(secondMeter, false, "Could not read format");
             formatLabel.Text = $"Could not read device formats: {ex.Message}";
             formatLabel.BackColor = SystemColors.Control;
             formatLabel.ForeColor = Color.FromArgb(170, 40, 40);
         }
     }
 
-    private static void SetFormatButton(Button button, bool ok, string tooltipText)
+    private static void SetFormatMeter(LevelMeter meter, bool ok, string tooltipText)
     {
-        button.BackColor = ok ? Color.FromArgb(45, 170, 80) : Color.FromArgb(230, 175, 45);
-        button.Text = "";
-        ToolTipProvider.SetToolTip(button, tooltipText + ". Click to open Windows sound settings.");
+        meter.StatusColor = ok ? Color.FromArgb(45, 170, 80) : Color.FromArgb(230, 175, 45);
+        ToolTipProvider.SetToolTip(meter, tooltipText + ". Click to open Windows sound settings.");
     }
 
     private void SyncAppSettings()
