@@ -3,6 +3,7 @@ obj/
 dist/
 release-build/
 *.zip
+AudioMirrorSetup/Payload/
 logs/
 *.user
 settings.json

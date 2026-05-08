@@ -1,0 +1,42 @@
+param(
+    [string]$Configuration = "Release"
+)
+
+$ErrorActionPreference = "Stop"
+
+$root = Split-Path -Parent $PSScriptRoot
+$publishDir = Join-Path $root "release-build\AudioMirrorApp"
+$payloadDir = Join-Path $root "AudioMirrorSetup\Payload"
+$payloadZip = Join-Path $payloadDir "AudioMirrorApp-win-x64.zip"
+$installerOut = Join-Path $root "release-build\AudioMirrorSetup"
+
+dotnet publish (Join-Path $root "AudioMirrorApp\AudioMirrorApp.csproj") `
+    --configfile (Join-Path $root "AudioMirrorApp\NuGet.Config") `
+    -c $Configuration `
+    -r win-x64 `
+    --self-contained false `
+    -p:PublishSingleFile=false `
+    -o $publishDir
+if ($LASTEXITCODE -ne 0) {
+    throw "AudioMirrorApp publish failed with exit code $LASTEXITCODE"
+}
+
+New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
+if (Test-Path -LiteralPath $payloadZip) {
+    Remove-Item -LiteralPath $payloadZip -Force
+}
+
+Get-ChildItem -LiteralPath $publishDir -File |
+    Where-Object { $_.Name -ne "AudioMirrorApp.pdb" -and $_.Name -ne "settings.json" } |
+    Compress-Archive -DestinationPath $payloadZip
+
+dotnet publish (Join-Path $root "AudioMirrorSetup\AudioMirrorSetup.csproj") `
+    --configfile (Join-Path $root "AudioMirrorSetup\NuGet.Config") `
+    -c $Configuration `
+    -o $installerOut
+if ($LASTEXITCODE -ne 0) {
+    throw "AudioMirrorSetup publish failed with exit code $LASTEXITCODE"
+}
+
+Write-Host "Installer:"
+Write-Host (Join-Path $installerOut "AudioMirrorSetup.exe")

@@ -24,6 +24,14 @@ controls so the outputs can be aligned by ear.
 Download the latest Windows build from the repository Releases page, unzip it,
 and run `AudioMirrorApp.exe`.
 
+There are two release packages:
+
+- `AudioMirrorSetup-win-x64.zip`: user-level installer. It installs AudioMirror
+  into `%LocalAppData%\Programs\AudioMirror`, creates Start Menu shortcuts, and
+  registers uninstall in Windows Apps & Features.
+- `AudioMirrorApp-win-x64.zip`: portable build. Unzip and run
+  `AudioMirrorApp.exe` directly.
+
 Requirements:
 
 - Windows 11
@@ -128,6 +136,12 @@ dotnet publish .\AudioMirrorApp\AudioMirrorApp.csproj -c Release -r win-x64 --se
 ```
 
 The app has no NuGet package dependencies.
+
+Build the installer package:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-Installer.ps1
+```
 
 ## Limitations
 
