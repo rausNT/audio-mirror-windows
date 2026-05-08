@@ -28,7 +28,8 @@ There are two release packages:
 
 - `AudioMirrorSetup-win-x64.zip`: user-level installer. It installs AudioMirror
   into `%LocalAppData%\Programs\AudioMirror`, creates Start Menu shortcuts, and
-  registers uninstall in Windows Apps & Features.
+  registers uninstall in Windows Apps & Features. During upgrades, it closes a
+  running AudioMirror instance before replacing files.
 - `AudioMirrorApp-win-x64.zip`: portable build. Unzip and run
   `AudioMirrorApp.exe` directly.
 
