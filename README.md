@@ -99,9 +99,10 @@ sound, set both physical target devices to the same Windows format, for example
 `48000 Hz, 16 bit` or `48000 Hz, 24 bit`.
 
 The small meters next to each device show live signal level while mirroring is
-running. Their border color also acts as the format status: green means aligned,
-amber means possible resampling or target mismatch. Click a meter to open
-Windows sound settings. `Sync` applies the app-side safe defaults without
+running. They use a logarithmic dB-style scale so normal listening levels are
+visible, and their border color also acts as the format status: green means
+aligned, amber means possible resampling or target mismatch. Click a meter to
+open Windows sound settings. `Sync` applies the app-side safe defaults without
 changing Windows driver settings.
 
 ## PowerShell CLI

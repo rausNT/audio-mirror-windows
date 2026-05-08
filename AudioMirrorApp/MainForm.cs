@@ -26,6 +26,7 @@ internal sealed class MainForm : Form
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
+    private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 60 };
     private readonly MenuStrip menuStrip = new();
     private readonly ToolStripMenuItem fileMenu = new("&File");
     private readonly ToolStripMenuItem actionsMenu = new("&Actions");
@@ -121,7 +122,7 @@ internal sealed class MainForm : Form
             RowCount = 4,
             AutoSize = true
         };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 87));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -291,6 +292,7 @@ internal sealed class MainForm : Form
             PushLiveSettings();
         };
         statsTimer.Tick += (_, _) => UpdateStatus();
+        meterTimer.Tick += (_, _) => UpdateMeters();
         Resize += (_, _) =>
         {
             if (WindowState == FormWindowState.Minimized)
@@ -377,6 +379,7 @@ internal sealed class MainForm : Form
             startButton.Enabled = false;
             stopButton.Enabled = true;
             statsTimer.Start();
+            meterTimer.Start();
             UpdateStatus();
             UpdateCommandState();
         }
@@ -390,8 +393,10 @@ internal sealed class MainForm : Form
     private void StopMirror()
     {
         statsTimer.Stop();
+        meterTimer.Stop();
         engine?.Dispose();
         engine = null;
+        UpdateMeters();
         startButton.Enabled = true;
         stopButton.Enabled = false;
         UpdateStatus();
@@ -445,6 +450,7 @@ internal sealed class MainForm : Form
         if (engine is null)
         {
             statusLabel.Text = "Stopped.";
+            UpdateMeters();
             return;
         }
 
@@ -454,6 +460,19 @@ internal sealed class MainForm : Form
             $"Format: {engine.Format.SampleRate} Hz, {engine.Format.Channels} ch, {engine.Format.Bits} bit. Mode: {(splitLeftRightBox.Checked ? "Split L/R" : "Stereo mirror")}{Environment.NewLine}" +
             $"Packets {engine.Packets}, captured {engine.CapturedFrames}, T1 written {engine.FirstWrittenFrames}, dropped {engine.FirstDroppedFrames}, T2 written {engine.SecondWrittenFrames}, dropped {engine.SecondDroppedFrames}" +
             error;
+        UpdateMeters();
+    }
+
+    private void UpdateMeters()
+    {
+        if (engine is null)
+        {
+            sourceMeter.Level = 0;
+            firstMeter.Level = 0;
+            secondMeter.Level = 0;
+            return;
+        }
+
         sourceMeter.Level = engine.SourceLevel;
         firstMeter.Level = engine.FirstLevel;
         secondMeter.Level = engine.SecondLevel;

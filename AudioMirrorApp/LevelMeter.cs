@@ -4,12 +4,13 @@ using System.ComponentModel;
 
 internal sealed class LevelMeter : Control
 {
+    private readonly float[] history = new float[7];
     private float level;
     private Color statusColor = Color.FromArgb(45, 170, 80);
 
     public LevelMeter()
     {
-        Width = 22;
+        Width = 36;
         Height = 18;
         DoubleBuffered = true;
         TabStop = false;
@@ -22,6 +23,12 @@ internal sealed class LevelMeter : Control
         set
         {
             level = Math.Clamp(value, 0f, 1f);
+            for (var i = 0; i < history.Length - 1; i++)
+            {
+                history[i] = history[i + 1] * 0.92f;
+            }
+
+            history[^1] = ToDisplayLevel(level);
             Invalidate();
         }
     }
@@ -46,23 +53,56 @@ internal sealed class LevelMeter : Control
         var border = new Rectangle(0, 0, Width - 1, Height - 1);
         e.Graphics.DrawRectangle(borderPen, border);
 
-        var bars = 5;
-        var gap = 2;
+        var columns = history.Length;
+        var segments = 6;
+        var gap = 1;
         var usableWidth = Width - 4;
-        var barWidth = Math.Max(2, (usableWidth - (bars - 1) * gap) / bars);
-        var activeBars = (int)Math.Ceiling(level * bars);
+        var usableHeight = Height - 4;
+        var columnWidth = Math.Max(2, (usableWidth - (columns - 1) * gap) / columns);
+        var segmentHeight = Math.Max(1, (usableHeight - (segments - 1)) / segments);
 
-        for (var i = 0; i < bars; i++)
+        for (var column = 0; column < columns; column++)
         {
-            var normalized = (i + 1f) / bars;
-            var barHeight = Math.Max(3, (int)((Height - 5) * normalized));
-            var x = 2 + i * (barWidth + gap);
-            var y = Height - 3 - barHeight;
-            var color = i < activeBars
-                ? (normalized > 0.8f ? Color.FromArgb(225, 145, 40) : Color.FromArgb(40, 180, 88))
-                : Color.FromArgb(215, 220, 225);
-            using var brush = new SolidBrush(color);
-            e.Graphics.FillRectangle(brush, x, y, barWidth, barHeight);
+            var activeSegments = (int)Math.Ceiling(history[column] * segments);
+            var x = 2 + column * (columnWidth + gap);
+
+            for (var segment = 0; segment < segments; segment++)
+            {
+                var normalized = (segment + 1f) / segments;
+                var y = Height - 3 - (segment + 1) * segmentHeight - segment;
+                var color = segment < activeSegments
+                    ? SegmentColor(normalized)
+                    : Color.FromArgb(36, 44, 42);
+                using var brush = new SolidBrush(color);
+                e.Graphics.FillRectangle(brush, x, y, columnWidth, segmentHeight);
+            }
         }
+    }
+
+    private static float ToDisplayLevel(float linearLevel)
+    {
+        if (linearLevel <= 0.00001f)
+        {
+            return 0f;
+        }
+
+        const float floorDb = -60f;
+        var db = 20f * MathF.Log10(Math.Clamp(linearLevel, 0.00001f, 1f));
+        return Math.Clamp((db - floorDb) / -floorDb, 0f, 1f);
+    }
+
+    private static Color SegmentColor(float normalizedHeight)
+    {
+        if (normalizedHeight > 0.86f)
+        {
+            return Color.FromArgb(220, 65, 58);
+        }
+
+        if (normalizedHeight > 0.64f)
+        {
+            return Color.FromArgb(232, 210, 66);
+        }
+
+        return Color.FromArgb(34, 192, 83);
     }
 }
