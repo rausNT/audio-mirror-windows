@@ -23,10 +23,12 @@ internal sealed class MainForm : Form
     private readonly Button syncButton = new() { Text = "Sync" };
     private readonly Button testButton = new() { Text = "Test" };
     private readonly CheckBox splitLeftRightBox = new() { Text = "Split L/R", AutoSize = true };
+    private readonly CheckBox autoRestartBox = new() { Text = "Auto restart", AutoSize = true, Checked = true };
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
     private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 60 };
+    private readonly System.Windows.Forms.Timer watchdogTimer = new() { Interval = 2000 };
     private readonly MenuStrip menuStrip = new();
     private readonly ToolStripMenuItem fileMenu = new("&File");
     private readonly ToolStripMenuItem actionsMenu = new("&Actions");
@@ -55,6 +57,10 @@ internal sealed class MainForm : Form
     private readonly AppSettings settings;
     private readonly bool startAfterShown;
     private bool allowExit;
+    private bool restarting;
+    private long lastWatchdogCapturedFrames;
+    private long lastWatchdogWrittenFrames;
+    private int stalledWatchdogTicks;
     private IReadOnlyList<AudioDeviceInfo> devices = [];
     private WasapiMirrorEngine? engine;
 
@@ -145,7 +151,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, splitLeftRightBox]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, splitLeftRightBox, autoRestartBox]);
 
         var hint = new Label
         {
@@ -293,6 +299,7 @@ internal sealed class MainForm : Form
         };
         statsTimer.Tick += (_, _) => UpdateStatus();
         meterTimer.Tick += (_, _) => UpdateMeters();
+        watchdogTimer.Tick += (_, _) => WatchdogTick();
         Resize += (_, _) =>
         {
             if (WindowState == FormWindowState.Minimized)
@@ -332,6 +339,7 @@ internal sealed class MainForm : Form
         firstDelayBox.Value = ClampDecimal(settings.FirstDelayMs, firstDelayBox.Minimum, firstDelayBox.Maximum);
         secondDelayBox.Value = ClampDecimal(settings.SecondDelayMs, secondDelayBox.Minimum, secondDelayBox.Maximum);
         splitLeftRightBox.Checked = settings.SplitLeftRight;
+        autoRestartBox.Checked = settings.AutoRestart;
         menuSplitItem.Checked = settings.SplitLeftRight;
         UpdateCommandState();
     }
@@ -380,6 +388,8 @@ internal sealed class MainForm : Form
             stopButton.Enabled = true;
             statsTimer.Start();
             meterTimer.Start();
+            watchdogTimer.Start();
+            ResetWatchdog();
             UpdateStatus();
             UpdateCommandState();
         }
@@ -394,6 +404,7 @@ internal sealed class MainForm : Form
     {
         statsTimer.Stop();
         meterTimer.Stop();
+        watchdogTimer.Stop();
         engine?.Dispose();
         engine = null;
         UpdateMeters();
@@ -431,7 +442,8 @@ internal sealed class MainForm : Form
             SecondGain = (double)secondGainBox.Value,
             FirstDelayMs = (int)firstDelayBox.Value,
             SecondDelayMs = (int)secondDelayBox.Value,
-            SplitLeftRight = splitLeftRightBox.Checked
+            SplitLeftRight = splitLeftRightBox.Checked,
+            AutoRestart = autoRestartBox.Checked
         };
     }
 
@@ -505,6 +517,83 @@ internal sealed class MainForm : Form
         trayStartItem.Enabled = !running;
         trayStopItem.Enabled = running;
         notifyIcon.Text = running ? "AudioMirror - running" : "AudioMirror - stopped";
+    }
+
+    private void WatchdogTick()
+    {
+        if (engine is null || !autoRestartBox.Checked || restarting)
+        {
+            ResetWatchdog();
+            return;
+        }
+
+        if (engine.LastError is not null)
+        {
+            RestartMirror("audio stream error");
+            return;
+        }
+
+        var captured = engine.CapturedFrames;
+        var written = engine.FirstWrittenFrames + engine.SecondWrittenFrames;
+        var moved = captured != lastWatchdogCapturedFrames || written != lastWatchdogWrittenFrames;
+        lastWatchdogCapturedFrames = captured;
+        lastWatchdogWrittenFrames = written;
+
+        if (moved)
+        {
+            stalledWatchdogTicks = 0;
+            return;
+        }
+
+        stalledWatchdogTicks++;
+        if (stalledWatchdogTicks >= 4)
+        {
+            RestartMirror("audio stream stalled");
+        }
+    }
+
+    private void ResetWatchdog()
+    {
+        lastWatchdogCapturedFrames = engine?.CapturedFrames ?? 0;
+        lastWatchdogWrittenFrames = engine is null ? 0 : engine.FirstWrittenFrames + engine.SecondWrittenFrames;
+        stalledWatchdogTicks = 0;
+    }
+
+    private async void RestartMirror(string reason)
+    {
+        if (restarting)
+        {
+            return;
+        }
+
+        restarting = true;
+        statusLabel.Text = $"Restarting AudioMirror: {reason}...";
+        try
+        {
+            statsTimer.Stop();
+            meterTimer.Stop();
+            watchdogTimer.Stop();
+            engine?.Dispose();
+            engine = null;
+            UpdateMeters();
+            await Task.Delay(1200);
+
+            RefreshDevices();
+            StartMirror();
+            statusLabel.Text = $"AudioMirror restarted: {reason}.";
+        }
+        catch (Exception ex)
+        {
+            statusLabel.Text = $"Auto restart failed: {ex.Message}";
+            startButton.Enabled = true;
+            stopButton.Enabled = false;
+            UpdateCommandState();
+        }
+        finally
+        {
+            restarting = false;
+            ResetWatchdog();
+        }
     }
 
     private void UpdateFormatWarning()
@@ -625,6 +714,9 @@ internal sealed class MainForm : Form
 
             Sync
             Applies safe app-side defaults. It does not change Windows driver settings.
+
+            Auto restart
+            Watches the WASAPI streams and recreates them if a display sleep or endpoint reset stalls audio.
 
             Test
             Opens a built-in speaker test. Left plays Target 1, Right plays Target 2, Both plays both targets, and Loop cycles through them.

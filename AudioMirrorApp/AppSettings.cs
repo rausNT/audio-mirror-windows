@@ -10,4 +10,5 @@ internal sealed class AppSettings
     public int FirstDelayMs { get; set; } = 0;
     public int SecondDelayMs { get; set; } = 0;
     public bool SplitLeftRight { get; set; } = false;
+    public bool AutoRestart { get; set; } = true;
 }

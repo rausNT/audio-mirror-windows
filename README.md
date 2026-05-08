@@ -85,6 +85,8 @@ Then press `Start`.
 - `Test`: opens a built-in speaker test with `Left`, `Right`, `Both`, and
   `Loop`. It plays directly to the selected targets and animates the active
   speaker.
+- `Auto restart`: watches the audio stream and recreates WASAPI streams if a
+  display sleep, monitor power-off, or endpoint reset stalls audio.
 - `Help`: opens the built-in user guide.
 - `About`: shows the app name, repository, copyright, and MIT license summary.
 
