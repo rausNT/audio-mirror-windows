@@ -74,6 +74,9 @@ Then press `Start`.
 - `Save`: writes `settings.json` next to the app.
 - `Autostart`: registers the app in the current user's Windows startup and
   starts mirroring automatically using saved settings.
+- `Test`: opens a built-in speaker test with `Left`, `Right`, `Both`, and
+  `Loop`. It plays directly to the selected targets and animates the active
+  speaker.
 
 The status area shows captured and written frames. If captured frames stay at
 zero, the selected source device is not receiving the app/player audio.

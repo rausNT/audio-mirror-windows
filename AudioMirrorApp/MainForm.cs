@@ -21,6 +21,7 @@ internal sealed class MainForm : Form
     private readonly Button startupButton = new() { Text = "Autostart" };
     private readonly Button soundSettingsButton = new() { Text = "Sound settings" };
     private readonly Button syncButton = new() { Text = "Sync" };
+    private readonly Button testButton = new() { Text = "Test" };
     private readonly CheckBox splitLeftRightBox = new() { Text = "Split L/R", AutoSize = true };
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
@@ -106,7 +107,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, splitLeftRightBox]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, splitLeftRightBox]);
 
         var hint = new Label
         {
@@ -157,6 +158,7 @@ internal sealed class MainForm : Form
         startupButton.Click += (_, _) => RegisterStartup();
         soundSettingsButton.Click += (_, _) => OpenSoundSettings();
         syncButton.Click += (_, _) => SyncAppSettings();
+        testButton.Click += (_, _) => OpenTestWindow();
         sourceFormatButton.Click += (_, _) => OpenSoundSettings();
         firstFormatButton.Click += (_, _) => OpenSoundSettings();
         secondFormatButton.Click += (_, _) => OpenSoundSettings();
@@ -407,6 +409,19 @@ internal sealed class MainForm : Form
         {
             UseShellExecute = true
         });
+    }
+
+    private void OpenTestWindow()
+    {
+        try
+        {
+            using var form = new TestForm(SelectedDevice(firstTargetBox), SelectedDevice(secondTargetBox));
+            form.ShowDialog(this);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Test failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private static readonly ToolTip ToolTipProvider = new();
