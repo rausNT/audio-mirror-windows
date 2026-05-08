@@ -80,6 +80,16 @@ Then press `Start`.
 - `Help`: opens the built-in user guide.
 - `About`: shows the app name, repository, copyright, and MIT license summary.
 
+The main window also has a standard menu bar:
+
+- `File`: Start, Stop, Save settings, Autostart, Exit.
+- `Actions`: Refresh devices, Sound settings, Sync, Test speakers, Split L/R.
+- `Help`: User help and About.
+
+Minimize or close the window to keep AudioMirror running in the system tray.
+The tray menu can open the window, start/stop mirroring, open the speaker test,
+open Windows sound settings, show help, or exit the app.
+
 The status area shows captured and written frames. If captured frames stay at
 zero, the selected source device is not receiving the app/player audio.
 

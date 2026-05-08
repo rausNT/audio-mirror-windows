@@ -22,14 +22,38 @@ internal sealed class MainForm : Form
     private readonly Button soundSettingsButton = new() { Text = "Sound settings" };
     private readonly Button syncButton = new() { Text = "Sync" };
     private readonly Button testButton = new() { Text = "Test" };
-    private readonly Button helpButton = new() { Text = "Help" };
-    private readonly Button aboutButton = new() { Text = "About" };
     private readonly CheckBox splitLeftRightBox = new() { Text = "Split L/R", AutoSize = true };
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
+    private readonly MenuStrip menuStrip = new();
+    private readonly ToolStripMenuItem fileMenu = new("&File");
+    private readonly ToolStripMenuItem actionsMenu = new("&Actions");
+    private readonly ToolStripMenuItem helpMenu = new("&Help");
+    private readonly ToolStripMenuItem menuStartItem = new("&Start");
+    private readonly ToolStripMenuItem menuStopItem = new("S&top");
+    private readonly ToolStripMenuItem menuSaveItem = new("&Save settings");
+    private readonly ToolStripMenuItem menuAutostartItem = new("&Autostart");
+    private readonly ToolStripMenuItem menuExitItem = new("E&xit");
+    private readonly ToolStripMenuItem menuRefreshItem = new("&Refresh devices");
+    private readonly ToolStripMenuItem menuSoundItem = new("&Sound settings");
+    private readonly ToolStripMenuItem menuSyncItem = new("S&ync");
+    private readonly ToolStripMenuItem menuTestItem = new("&Test speakers");
+    private readonly ToolStripMenuItem menuSplitItem = new("Split &L/R") { CheckOnClick = true };
+    private readonly ToolStripMenuItem menuHelpItem = new("&User help");
+    private readonly ToolStripMenuItem menuAboutItem = new("&About AudioMirror");
+    private readonly NotifyIcon notifyIcon = new();
+    private readonly ContextMenuStrip trayMenu = new();
+    private readonly ToolStripMenuItem trayOpenItem = new("&Open AudioMirror");
+    private readonly ToolStripMenuItem trayStartItem = new("&Start");
+    private readonly ToolStripMenuItem trayStopItem = new("S&top");
+    private readonly ToolStripMenuItem trayTestItem = new("&Test speakers");
+    private readonly ToolStripMenuItem traySoundItem = new("&Sound settings");
+    private readonly ToolStripMenuItem trayHelpItem = new("&Help");
+    private readonly ToolStripMenuItem trayExitItem = new("E&xit");
     private readonly AppSettings settings;
     private readonly bool startAfterShown;
+    private bool allowExit;
     private IReadOnlyList<AudioDeviceInfo> devices = [];
     private WasapiMirrorEngine? engine;
 
@@ -39,12 +63,12 @@ internal sealed class MainForm : Form
         Text = "AudioMirror";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
-        Width = 760;
-        Height = 360;
-        MinimumSize = new Size(680, 320);
+        ClientSize = new Size(760, 420);
+        MinimumSize = new Size(760, 430);
 
         settings = SettingsStore.Load();
         BuildLayout();
+        BuildTrayMenu();
         WireEvents();
         RefreshDevices();
         ApplySettingsToControls();
@@ -59,12 +83,23 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (!allowExit && e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            HideToTray();
+            return;
+        }
+
+        notifyIcon.Visible = false;
+        notifyIcon.Dispose();
         engine?.Dispose();
         base.OnFormClosing(e);
     }
 
     private void BuildLayout()
     {
+        BuildMenu();
+
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -109,7 +144,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, helpButton, aboutButton, splitLeftRightBox]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, splitLeftRightBox]);
 
         var hint = new Label
         {
@@ -128,6 +163,57 @@ internal sealed class MainForm : Form
         root.Controls.Add(formatLabel, 0, 3);
         root.Controls.Add(statusLabel, 0, 4);
         Controls.Add(root);
+        Controls.Add(menuStrip);
+        MainMenuStrip = menuStrip;
+    }
+
+    private void BuildMenu()
+    {
+        fileMenu.DropDownItems.AddRange([
+            menuStartItem,
+            menuStopItem,
+            new ToolStripSeparator(),
+            menuSaveItem,
+            menuAutostartItem,
+            new ToolStripSeparator(),
+            menuExitItem
+        ]);
+
+        actionsMenu.DropDownItems.AddRange([
+            menuRefreshItem,
+            menuSoundItem,
+            menuSyncItem,
+            menuTestItem,
+            new ToolStripSeparator(),
+            menuSplitItem
+        ]);
+
+        helpMenu.DropDownItems.AddRange([
+            menuHelpItem,
+            menuAboutItem
+        ]);
+
+        menuStrip.Items.AddRange([fileMenu, actionsMenu, helpMenu]);
+    }
+
+    private void BuildTrayMenu()
+    {
+        trayMenu.Items.AddRange([
+            trayOpenItem,
+            new ToolStripSeparator(),
+            trayStartItem,
+            trayStopItem,
+            trayTestItem,
+            traySoundItem,
+            trayHelpItem,
+            new ToolStripSeparator(),
+            trayExitItem
+        ]);
+
+        notifyIcon.Icon = Icon ?? SystemIcons.Application;
+        notifyIcon.Text = "AudioMirror";
+        notifyIcon.ContextMenuStrip = trayMenu;
+        notifyIcon.Visible = true;
     }
 
     private static void AddRow(TableLayoutPanel grid, int row, Button formatButton, string label, Control deviceControl, Control? gainControl, Control? delayControl)
@@ -161,8 +247,32 @@ internal sealed class MainForm : Form
         soundSettingsButton.Click += (_, _) => OpenSoundSettings();
         syncButton.Click += (_, _) => SyncAppSettings();
         testButton.Click += (_, _) => OpenTestWindow();
-        helpButton.Click += (_, _) => ShowHelp();
-        aboutButton.Click += (_, _) => ShowAbout();
+        menuStartItem.Click += (_, _) => StartMirror();
+        menuStopItem.Click += (_, _) => StopMirror();
+        menuSaveItem.Click += (_, _) => SaveSettingsFromControls();
+        menuAutostartItem.Click += (_, _) => RegisterStartup();
+        menuExitItem.Click += (_, _) => ExitApplication();
+        menuRefreshItem.Click += (_, _) => RefreshDevices();
+        menuSoundItem.Click += (_, _) => OpenSoundSettings();
+        menuSyncItem.Click += (_, _) => SyncAppSettings();
+        menuTestItem.Click += (_, _) => OpenTestWindow();
+        menuSplitItem.CheckedChanged += (_, _) =>
+        {
+            if (splitLeftRightBox.Checked != menuSplitItem.Checked)
+            {
+                splitLeftRightBox.Checked = menuSplitItem.Checked;
+            }
+        };
+        menuHelpItem.Click += (_, _) => ShowHelp();
+        menuAboutItem.Click += (_, _) => ShowAbout();
+        trayOpenItem.Click += (_, _) => ShowMainWindow();
+        trayStartItem.Click += (_, _) => StartMirror();
+        trayStopItem.Click += (_, _) => StopMirror();
+        trayTestItem.Click += (_, _) => OpenTestWindow();
+        traySoundItem.Click += (_, _) => OpenSoundSettings();
+        trayHelpItem.Click += (_, _) => ShowHelp();
+        trayExitItem.Click += (_, _) => ExitApplication();
+        notifyIcon.DoubleClick += (_, _) => ShowMainWindow();
         sourceFormatButton.Click += (_, _) => OpenSoundSettings();
         firstFormatButton.Click += (_, _) => OpenSoundSettings();
         secondFormatButton.Click += (_, _) => OpenSoundSettings();
@@ -173,8 +283,22 @@ internal sealed class MainForm : Form
         secondGainBox.ValueChanged += (_, _) => PushLiveSettings();
         firstDelayBox.ValueChanged += (_, _) => PushLiveSettings();
         secondDelayBox.ValueChanged += (_, _) => PushLiveSettings();
-        splitLeftRightBox.CheckedChanged += (_, _) => PushLiveSettings();
+        splitLeftRightBox.CheckedChanged += (_, _) =>
+        {
+            if (menuSplitItem.Checked != splitLeftRightBox.Checked)
+            {
+                menuSplitItem.Checked = splitLeftRightBox.Checked;
+            }
+            PushLiveSettings();
+        };
         statsTimer.Tick += (_, _) => UpdateStatus();
+        Resize += (_, _) =>
+        {
+            if (WindowState == FormWindowState.Minimized)
+            {
+                HideToTray();
+            }
+        };
     }
 
     private void RefreshDevices()
@@ -207,6 +331,8 @@ internal sealed class MainForm : Form
         firstDelayBox.Value = ClampDecimal(settings.FirstDelayMs, firstDelayBox.Minimum, firstDelayBox.Maximum);
         secondDelayBox.Value = ClampDecimal(settings.SecondDelayMs, secondDelayBox.Minimum, secondDelayBox.Maximum);
         splitLeftRightBox.Checked = settings.SplitLeftRight;
+        menuSplitItem.Checked = settings.SplitLeftRight;
+        UpdateCommandState();
     }
 
     private static decimal ClampDecimal(decimal value, decimal minimum, decimal maximum)
@@ -253,6 +379,7 @@ internal sealed class MainForm : Form
             stopButton.Enabled = true;
             statsTimer.Start();
             UpdateStatus();
+            UpdateCommandState();
         }
         catch (Exception ex)
         {
@@ -269,6 +396,7 @@ internal sealed class MainForm : Form
         startButton.Enabled = true;
         stopButton.Enabled = false;
         UpdateStatus();
+        UpdateCommandState();
     }
 
     private void PushLiveSettings()
@@ -346,6 +474,18 @@ internal sealed class MainForm : Form
         }
     }
 
+    private void UpdateCommandState()
+    {
+        var running = engine is not null;
+        startButton.Enabled = !running;
+        stopButton.Enabled = running;
+        menuStartItem.Enabled = !running;
+        menuStopItem.Enabled = running;
+        trayStartItem.Enabled = !running;
+        trayStopItem.Enabled = running;
+        notifyIcon.Text = running ? "AudioMirror - running" : "AudioMirror - stopped";
+    }
+
     private void UpdateFormatWarning()
     {
         try
@@ -420,7 +560,14 @@ internal sealed class MainForm : Form
         try
         {
             using var form = new TestForm(SelectedDevice(firstTargetBox), SelectedDevice(secondTargetBox));
-            form.ShowDialog(this);
+            if (Visible)
+            {
+                form.ShowDialog(this);
+            }
+            else
+            {
+                form.ShowDialog();
+            }
         }
         catch (Exception ex)
         {
@@ -476,7 +623,14 @@ internal sealed class MainForm : Form
 
             If one target is silent, use Test first. If Test is also silent, check the target device volume, monitor audio source, mute state, and cable/input.
             """);
-        form.ShowDialog(this);
+        if (Visible)
+        {
+            form.ShowDialog(this);
+        }
+        else
+        {
+            form.ShowDialog();
+        }
     }
 
     private void ShowAbout()
@@ -501,7 +655,35 @@ internal sealed class MainForm : Form
 
             THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
             """);
-        form.ShowDialog(this);
+        if (Visible)
+        {
+            form.ShowDialog(this);
+        }
+        else
+        {
+            form.ShowDialog();
+        }
+    }
+
+    private void HideToTray()
+    {
+        Hide();
+        ShowInTaskbar = false;
+        notifyIcon.Visible = true;
+    }
+
+    private void ShowMainWindow()
+    {
+        ShowInTaskbar = true;
+        Show();
+        WindowState = FormWindowState.Normal;
+        Activate();
+    }
+
+    private void ExitApplication()
+    {
+        allowExit = true;
+        Close();
     }
 
     private static readonly ToolTip ToolTipProvider = new();
