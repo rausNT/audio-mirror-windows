@@ -43,10 +43,12 @@ internal sealed class InfoForm : Form
 
         var closeButton = new Button
         {
-            Text = "Close",
+            Text = AppText.T("Close"),
             DialogResult = DialogResult.OK,
             Anchor = AnchorStyles.Right,
-            Width = 90,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(90, 30),
             Margin = new Padding(0, 12, 0, 0)
         };
 

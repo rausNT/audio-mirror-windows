@@ -10,6 +10,12 @@ internal sealed class MainForm : Form
     private readonly LevelMeter sourceMeter = new();
     private readonly LevelMeter firstMeter = new();
     private readonly LevelMeter secondMeter = new();
+    private readonly Label sourceLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) };
+    private readonly Label firstTargetLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) };
+    private readonly Label secondTargetLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) };
+    private readonly Label gainLabel = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label delayLabel = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label hintLabel = new() { AutoSize = true, Padding = new Padding(0, 0, 0, 8) };
     private readonly NumericUpDown firstGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown secondGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown firstDelayBox = new() { Minimum = 0, Maximum = 2000, Increment = 5, Width = 90 };
@@ -34,6 +40,7 @@ internal sealed class MainForm : Form
     private readonly ToolStripMenuItem fileMenu = new("&File");
     private readonly ToolStripMenuItem actionsMenu = new("&Actions");
     private readonly ToolStripMenuItem helpMenu = new("&Help");
+    private readonly ToolStripMenuItem languageMenu = new("&Language");
     private readonly ToolStripMenuItem menuStartItem = new("&Start");
     private readonly ToolStripMenuItem menuStopItem = new("S&top");
     private readonly ToolStripMenuItem menuSaveItem = new("&Save settings");
@@ -55,13 +62,14 @@ internal sealed class MainForm : Form
     private readonly ToolStripMenuItem traySoundItem = new("&Sound settings");
     private readonly ToolStripMenuItem trayHelpItem = new("&Help");
     private readonly ToolStripMenuItem trayExitItem = new("E&xit");
+    private readonly List<ToolStripMenuItem> languageItems = [];
     private AppSettings settings;
     private readonly bool startAfterShown;
     private bool allowExit;
     private bool restarting;
     private bool restartAfterDeviceRefresh;
     private int pendingDeviceRefreshTicks;
-    private string deviceRefreshReason = "device change";
+    private string deviceRefreshReasonKey = "DeviceChange";
     private long lastWatchdogCapturedFrames;
     private long lastWatchdogWrittenFrames;
     private int stalledWatchdogTicks;
@@ -78,9 +86,11 @@ internal sealed class MainForm : Form
         MinimumSize = new Size(760, 430);
 
         settings = SettingsStore.Load();
+        AppText.SetLanguage(settings.LanguageCode);
         BuildLayout();
         BuildTrayMenu();
         WireEvents();
+        ApplyLocalization();
         RefreshDevices();
         ApplySettingsToControls();
         Shown += (_, _) =>
@@ -116,7 +126,7 @@ internal sealed class MainForm : Form
 
         if (m.Msg == wmDeviceChange)
         {
-            ScheduleDeviceRefresh("audio device change", engine is not null);
+            ScheduleDeviceRefresh("DeviceChange", engine is not null);
         }
     }
 
@@ -151,15 +161,15 @@ internal sealed class MainForm : Form
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
 
-        AddRow(grid, 0, sourceMeter, "Source", sourceBox, null, null);
-        AddRow(grid, 1, firstMeter, "Target 1", firstTargetBox, firstGainBox, firstDelayBox);
-        AddRow(grid, 2, secondMeter, "Target 2", secondTargetBox, secondGainBox, secondDelayBox);
+        AddRow(grid, 0, sourceMeter, sourceLabel, sourceBox, null, null);
+        AddRow(grid, 1, firstMeter, firstTargetLabel, firstTargetBox, firstGainBox, firstDelayBox);
+        AddRow(grid, 2, secondMeter, secondTargetLabel, secondTargetBox, secondGainBox, secondDelayBox);
 
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 0, 3);
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 1, 3);
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 2, 3);
-        grid.Controls.Add(new Label { Text = "Gain", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft }, 3, 3);
-        grid.Controls.Add(new Label { Text = "Delay ms", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft }, 4, 3);
+        grid.Controls.Add(gainLabel, 3, 3);
+        grid.Controls.Add(delayLabel, 4, 3);
 
         var buttons = new FlowLayoutPanel
         {
@@ -170,20 +180,13 @@ internal sealed class MainForm : Form
         };
         buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, splitLeftRightBox, autoRestartBox]);
 
-        var hint = new Label
-        {
-            Text = "Set Windows default output to the selected Source, restart the player if captured frames stay at 0.",
-            AutoSize = true,
-            Padding = new Padding(0, 0, 0, 8)
-        };
-
         statusLabel.BorderStyle = BorderStyle.FixedSingle;
         statusLabel.Padding = new Padding(8);
         formatLabel.Padding = new Padding(4, 6, 4, 4);
 
         root.Controls.Add(grid, 0, 0);
         root.Controls.Add(buttons, 0, 1);
-        root.Controls.Add(hint, 0, 2);
+        root.Controls.Add(hintLabel, 0, 2);
         root.Controls.Add(formatLabel, 0, 3);
         root.Controls.Add(statusLabel, 0, 4);
         Controls.Add(root);
@@ -212,12 +215,29 @@ internal sealed class MainForm : Form
             menuSplitItem
         ]);
 
+        BuildLanguageMenu();
+
         helpMenu.DropDownItems.AddRange([
             menuHelpItem,
             menuAboutItem
         ]);
 
-        menuStrip.Items.AddRange([fileMenu, actionsMenu, helpMenu]);
+        menuStrip.Items.AddRange([fileMenu, actionsMenu, languageMenu, helpMenu]);
+    }
+
+    private void BuildLanguageMenu()
+    {
+        foreach (var language in AppText.Options)
+        {
+            var item = new ToolStripMenuItem(language.Name)
+            {
+                Tag = language.Code,
+                CheckOnClick = false
+            };
+            item.Click += (_, _) => SetLanguage(language.Code);
+            languageItems.Add(item);
+            languageMenu.DropDownItems.Add(item);
+        }
     }
 
     private void BuildTrayMenu()
@@ -240,12 +260,12 @@ internal sealed class MainForm : Form
         notifyIcon.Visible = true;
     }
 
-    private static void AddRow(TableLayoutPanel grid, int row, LevelMeter meter, string label, Control deviceControl, Control? gainControl, Control? delayControl)
+    private static void AddRow(TableLayoutPanel grid, int row, LevelMeter meter, Label label, Control deviceControl, Control? gainControl, Control? delayControl)
     {
         grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         meter.Margin = new Padding(0, 5, 6, 0);
         grid.Controls.Add(meter, 0, row);
-        grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) }, 1, row);
+        grid.Controls.Add(label, 1, row);
         deviceControl.Dock = DockStyle.Fill;
         grid.Controls.Add(deviceControl, 2, row);
 
@@ -329,6 +349,95 @@ internal sealed class MainForm : Form
         };
     }
 
+    private void SetLanguage(string code)
+    {
+        AppText.SetLanguage(code);
+        settings.LanguageCode = AppText.CurrentCode;
+        try
+        {
+            settings = ReadSettingsFromControls();
+            settings.LanguageCode = AppText.CurrentCode;
+        }
+        catch
+        {
+            // Language can still be changed while devices are temporarily unavailable.
+        }
+
+        SettingsStore.Save(settings);
+        ApplyLocalization();
+        RefreshDevices(preserveCurrentSelection: true, updateStatus: false);
+        UpdateStatus();
+    }
+
+    private void ApplyLocalization()
+    {
+        fileMenu.Text = AppText.T("File");
+        actionsMenu.Text = AppText.T("Actions");
+        languageMenu.Text = AppText.T("Language");
+        helpMenu.Text = AppText.T("Help");
+        menuStartItem.Text = AppText.T("Start");
+        menuStopItem.Text = AppText.T("Stop");
+        menuSaveItem.Text = AppText.T("SaveSettings");
+        menuAutostartItem.Text = AppText.T("Autostart");
+        menuExitItem.Text = AppText.T("Exit");
+        menuRefreshItem.Text = AppText.T("RefreshDevices");
+        menuSoundItem.Text = AppText.T("SoundSettings");
+        menuSyncItem.Text = AppText.T("Sync");
+        menuTestItem.Text = AppText.T("TestSpeakers");
+        menuSplitItem.Text = AppText.T("SplitLR");
+        menuHelpItem.Text = AppText.T("UserHelp");
+        menuAboutItem.Text = AppText.T("AboutAudioMirror");
+
+        trayOpenItem.Text = AppText.T("OpenAudioMirror");
+        trayStartItem.Text = AppText.T("Start");
+        trayStopItem.Text = AppText.T("Stop");
+        trayTestItem.Text = AppText.T("TestSpeakers");
+        traySoundItem.Text = AppText.T("SoundSettings");
+        trayHelpItem.Text = AppText.T("Help");
+        trayExitItem.Text = AppText.T("Exit");
+
+        refreshButton.Text = AppText.T("Refresh");
+        startButton.Text = AppText.T("Start");
+        stopButton.Text = AppText.T("Stop");
+        saveButton.Text = AppText.T("Save");
+        startupButton.Text = AppText.T("Autostart");
+        soundSettingsButton.Text = AppText.T("Sound");
+        syncButton.Text = AppText.T("Sync");
+        testButton.Text = AppText.T("Test");
+        splitLeftRightBox.Text = AppText.T("SplitLR");
+        autoRestartBox.Text = AppText.T("AutoRestart");
+
+        sourceLabel.Text = AppText.T("Source");
+        firstTargetLabel.Text = AppText.T("Target1");
+        secondTargetLabel.Text = AppText.T("Target2");
+        gainLabel.Text = AppText.T("Gain");
+        delayLabel.Text = AppText.T("DelayMs");
+        hintLabel.Text = AppText.T("Hint");
+
+        foreach (var item in languageItems)
+        {
+            item.Checked = string.Equals(item.Tag as string, AppText.CurrentCode, StringComparison.OrdinalIgnoreCase);
+        }
+
+        FitCommandButton(refreshButton);
+        FitCommandButton(startButton);
+        FitCommandButton(stopButton);
+        FitCommandButton(saveButton);
+        FitCommandButton(startupButton);
+        FitCommandButton(soundSettingsButton);
+        FitCommandButton(syncButton);
+        FitCommandButton(testButton);
+        UpdateCommandState();
+    }
+
+    private static void FitCommandButton(Button button)
+    {
+        button.AutoSize = true;
+        button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        button.MinimumSize = new Size(72, 28);
+        button.MaximumSize = new Size(126, 0);
+    }
+
     private void RefreshDevices()
     {
         RefreshDevices(preserveCurrentSelection: true, updateStatus: true);
@@ -354,7 +463,7 @@ internal sealed class MainForm : Form
         UpdateFormatWarning();
         if (updateStatus)
         {
-            statusLabel.Text = $"Devices refreshed: {devices.Count} playback endpoints.";
+            statusLabel.Text = AppText.F("DevicesRefreshed", devices.Count);
         }
     }
 
@@ -496,9 +605,9 @@ internal sealed class MainForm : Form
             var source = SelectedDevice(sourceBox);
             var firstTarget = SelectedDevice(firstTargetBox);
             var secondTarget = SelectedDevice(secondTargetBox);
-            EnsureActive(source, "Source");
-            EnsureActive(firstTarget, "Target 1");
-            EnsureActive(secondTarget, "Target 2");
+            EnsureActive(source, AppText.T("Source"));
+            EnsureActive(firstTarget, AppText.T("Target1"));
+            EnsureActive(secondTarget, AppText.T("Target2"));
             settings = ReadSettingsFromControls();
             engine = new WasapiMirrorEngine(
                 source,
@@ -521,7 +630,7 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Start failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, AppText.T("StartFailed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             StopMirror();
         }
     }
@@ -555,7 +664,7 @@ internal sealed class MainForm : Form
         var snapshot = ReadSettingsFromControls();
         settings = snapshot;
         SettingsStore.Save(snapshot);
-        statusLabel.Text = $"Saved: {SettingsStore.SettingsPath}";
+        statusLabel.Text = AppText.F("Saved", SettingsStore.SettingsPath);
     }
 
     private AppSettings ReadSettingsFromControls()
@@ -576,7 +685,8 @@ internal sealed class MainForm : Form
             FirstDelayMs = (int)firstDelayBox.Value,
             SecondDelayMs = (int)secondDelayBox.Value,
             SplitLeftRight = splitLeftRightBox.Checked,
-            AutoRestart = autoRestartBox.Checked
+            AutoRestart = autoRestartBox.Checked,
+            LanguageCode = settings.LanguageCode
         };
     }
 
@@ -587,14 +697,14 @@ internal sealed class MainForm : Form
             return device;
         }
 
-        throw new InvalidOperationException("Select all devices first.");
+        throw new InvalidOperationException(AppText.T("SelectAllDevices"));
     }
 
     private static void EnsureActive(AudioDeviceInfo device, string role)
     {
         if (!device.IsActive)
         {
-            throw new InvalidOperationException($"{role} is visible in Windows but is not active yet: {device.Name}. Wake the display, then press Refresh or wait for auto refresh.");
+            throw new InvalidOperationException(AppText.F("EnsureActive", role, device.Name));
         }
     }
 
@@ -602,16 +712,16 @@ internal sealed class MainForm : Form
     {
         if (engine is null)
         {
-            statusLabel.Text = "Stopped.";
+            statusLabel.Text = AppText.T("Stopped");
             UpdateMeters();
             return;
         }
 
-        var error = engine.LastError is null ? "" : $"{Environment.NewLine}Error: {engine.LastError.Message}";
+        var error = engine.LastError is null ? "" : $"{Environment.NewLine}{AppText.F("ErrorLine", engine.LastError.Message)}";
         statusLabel.Text =
-            $"Running: {engine.SourceName} -> {engine.FirstTargetName}, {engine.SecondTargetName}{Environment.NewLine}" +
-            $"Format: {engine.Format.SampleRate} Hz, {engine.Format.Channels} ch, {engine.Format.Bits} bit. Mode: {(splitLeftRightBox.Checked ? "Split L/R" : "Stereo mirror")}{Environment.NewLine}" +
-            $"Packets {engine.Packets}, captured {engine.CapturedFrames}, T1 written {engine.FirstWrittenFrames}, dropped {engine.FirstDroppedFrames}, T2 written {engine.SecondWrittenFrames}, dropped {engine.SecondDroppedFrames}" +
+            AppText.F("RunningLine", engine.SourceName, engine.FirstTargetName, engine.SecondTargetName) + Environment.NewLine +
+            AppText.F("FormatLine", engine.Format.SampleRate, engine.Format.Channels, engine.Format.Bits, splitLeftRightBox.Checked ? AppText.T("ModeSplit") : AppText.T("ModeStereo")) + Environment.NewLine +
+            AppText.F("PacketsLine", engine.Packets, engine.CapturedFrames, engine.FirstWrittenFrames, engine.FirstDroppedFrames, engine.SecondWrittenFrames, engine.SecondDroppedFrames) +
             error;
         UpdateMeters();
     }
@@ -640,11 +750,11 @@ internal sealed class MainForm : Form
             using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: true)
                 ?? Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
             key.SetValue("AudioMirror", $"\"{appPath}\" --start");
-            statusLabel.Text = "Autostart registered. Settings saved.";
+            statusLabel.Text = AppText.T("AutostartRegistered");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Autostart failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, AppText.T("AutostartFailed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -657,7 +767,7 @@ internal sealed class MainForm : Form
         menuStopItem.Enabled = running;
         trayStartItem.Enabled = !running;
         trayStopItem.Enabled = running;
-        notifyIcon.Text = running ? "AudioMirror - running" : "AudioMirror - stopped";
+        notifyIcon.Text = running ? AppText.T("NotifyRunning") : AppText.T("NotifyStopped");
     }
 
     private void WatchdogTick()
@@ -670,7 +780,7 @@ internal sealed class MainForm : Form
 
         if (engine.LastError is not null)
         {
-            RestartMirror("audio stream error");
+            RestartMirror("StreamError");
             return;
         }
 
@@ -689,7 +799,7 @@ internal sealed class MainForm : Form
         stalledWatchdogTicks++;
         if (stalledWatchdogTicks >= 4)
         {
-            RestartMirror("audio stream stalled");
+            RestartMirror("StreamStalled");
         }
     }
 
@@ -708,7 +818,7 @@ internal sealed class MainForm : Form
             {
                 restartAfterDeviceRefresh = true;
                 StopMirror();
-                statusLabel.Text = "Paused for system sleep. AudioMirror will refresh devices after resume.";
+                statusLabel.Text = AppText.T("PausedSleep");
             }
 
             return;
@@ -716,18 +826,18 @@ internal sealed class MainForm : Form
 
         if (e.Mode == Microsoft.Win32.PowerModes.Resume)
         {
-            ScheduleDeviceRefresh("system resume", restartAfterDeviceRefresh || engine is not null);
+            ScheduleDeviceRefresh("SystemResume", restartAfterDeviceRefresh || engine is not null);
         }
     }
 
     private void SystemEventsDisplaySettingsChanged(object? sender, EventArgs e)
     {
-        ScheduleDeviceRefresh("display change", engine is not null);
+        ScheduleDeviceRefresh("DisplayChange", engine is not null);
     }
 
-    private void ScheduleDeviceRefresh(string reason, bool restartWhenReady)
+    private void ScheduleDeviceRefresh(string reasonKey, bool restartWhenReady)
     {
-        deviceRefreshReason = reason;
+        deviceRefreshReasonKey = reasonKey;
         pendingDeviceRefreshTicks = 15;
         restartAfterDeviceRefresh |= restartWhenReady;
         deviceRefreshTimer.Stop();
@@ -735,7 +845,7 @@ internal sealed class MainForm : Form
 
         if (restartWhenReady)
         {
-            statusLabel.Text = $"Waiting for audio devices after {reason}...";
+            statusLabel.Text = AppText.F("WaitingDevices", AppText.T(reasonKey));
         }
     }
 
@@ -755,13 +865,13 @@ internal sealed class MainForm : Form
 
             if (!restartAfterDeviceRefresh)
             {
-                statusLabel.Text = $"Devices refreshed after {deviceRefreshReason}: {devices.Count} playback endpoints.";
+                statusLabel.Text = AppText.F("DevicesRefreshedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
                 return;
             }
 
             if (!SelectedDevicesReady())
             {
-                statusLabel.Text = $"Waiting for selected audio devices after {deviceRefreshReason}... {devices.Count} endpoint(s) visible.";
+                statusLabel.Text = AppText.F("WaitingSelectedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
                 return;
             }
 
@@ -773,11 +883,11 @@ internal sealed class MainForm : Form
             StartMirror();
             restartAfterDeviceRefresh = false;
             deviceRefreshTimer.Stop();
-            statusLabel.Text = $"AudioMirror restarted after {deviceRefreshReason}.";
+            statusLabel.Text = AppText.F("RestartedAfter", AppText.T(deviceRefreshReasonKey));
         }
         catch (Exception ex)
         {
-            statusLabel.Text = $"Device refresh after {deviceRefreshReason} failed: {ex.Message}";
+            statusLabel.Text = AppText.F("DeviceRefreshFailed", AppText.T(deviceRefreshReasonKey), ex.Message);
         }
     }
 
@@ -798,7 +908,7 @@ internal sealed class MainForm : Form
             !string.Equals(firstTarget.Id, secondTarget.Id, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async void RestartMirror(string reason)
+    private async void RestartMirror(string reasonKey)
     {
         if (restarting)
         {
@@ -806,7 +916,7 @@ internal sealed class MainForm : Form
         }
 
         restarting = true;
-        statusLabel.Text = $"Restarting AudioMirror: {reason}...";
+        statusLabel.Text = AppText.F("Restarting", AppText.T(reasonKey));
         try
         {
             statsTimer.Stop();
@@ -819,11 +929,11 @@ internal sealed class MainForm : Form
 
             RefreshDevices();
             StartMirror();
-            statusLabel.Text = $"AudioMirror restarted: {reason}.";
+            statusLabel.Text = AppText.F("Restarted", AppText.T(reasonKey));
         }
         catch (Exception ex)
         {
-            statusLabel.Text = $"Auto restart failed: {ex.Message}";
+            statusLabel.Text = AppText.F("AutoRestartFailed", ex.Message);
             startButton.Enabled = true;
             stopButton.Enabled = false;
             UpdateCommandState();
@@ -843,17 +953,17 @@ internal sealed class MainForm : Form
                 firstTargetBox.SelectedItem is not AudioDeviceInfo firstTarget ||
                 secondTargetBox.SelectedItem is not AudioDeviceInfo secondTarget)
             {
-                formatLabel.Text = "Select source and target devices to check formats.";
+                formatLabel.Text = AppText.T("SelectDevices");
                 formatLabel.BackColor = SystemColors.Control;
                 return;
             }
 
             if (!source.IsActive || !firstTarget.IsActive || !secondTarget.IsActive)
             {
-                SetFormatMeter(sourceMeter, source.IsActive, $"Source: {DeviceStateText(source)}");
-                SetFormatMeter(firstMeter, firstTarget.IsActive, $"Target 1: {DeviceStateText(firstTarget)}");
-                SetFormatMeter(secondMeter, secondTarget.IsActive, $"Target 2: {DeviceStateText(secondTarget)}");
-                formatLabel.Text = "Some selected devices are visible but not active yet. Wake the display, then press Refresh or wait for auto refresh.";
+                SetFormatMeter(sourceMeter, source.IsActive, AppText.F("FormatTooltip", AppText.T("Source"), DeviceStateText(source)));
+                SetFormatMeter(firstMeter, firstTarget.IsActive, AppText.F("FormatTooltip", AppText.T("Target1"), DeviceStateText(firstTarget)));
+                SetFormatMeter(secondMeter, secondTarget.IsActive, AppText.F("FormatTooltip", AppText.T("Target2"), DeviceStateText(secondTarget)));
+                formatLabel.Text = AppText.T("NotActiveSelected");
                 formatLabel.BackColor = SystemColors.Control;
                 formatLabel.ForeColor = Color.FromArgb(160, 95, 0);
                 return;
@@ -866,26 +976,26 @@ internal sealed class MainForm : Form
             var allMatch = sourceFormat.Matches(firstFormat) && sourceFormat.Matches(secondFormat);
             var sourceMatchesTargets = sourceFormat.Matches(firstFormat) || sourceFormat.Matches(secondFormat);
 
-            SetFormatMeter(sourceMeter, sourceMatchesTargets || allMatch, $"Source: {sourceFormat.DisplayName}");
-            SetFormatMeter(firstMeter, firstFormat.Matches(sourceFormat) && targetsMatch, $"Target 1: {firstFormat.DisplayName}");
-            SetFormatMeter(secondMeter, secondFormat.Matches(sourceFormat) && targetsMatch, $"Target 2: {secondFormat.DisplayName}");
+            SetFormatMeter(sourceMeter, sourceMatchesTargets || allMatch, AppText.F("FormatTooltip", AppText.T("Source"), sourceFormat.DisplayName));
+            SetFormatMeter(firstMeter, firstFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target1"), firstFormat.DisplayName));
+            SetFormatMeter(secondMeter, secondFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target2"), secondFormat.DisplayName));
 
             formatLabel.Text =
                 (allMatch
-                    ? $"Formats match: {sourceFormat.DisplayName}"
+                    ? AppText.F("FormatMatch", sourceFormat.DisplayName)
                     : targetsMatch
-                        ? $"Targets match: {firstFormat.DisplayName}. Source differs: {sourceFormat.DisplayName}; Windows will resample."
-                        : $"Target formats differ. T1 {firstFormat.DisplayName}; T2 {secondFormat.DisplayName}. Set both targets to 48000 Hz 16/24 bit.");
+                        ? AppText.F("TargetsMatch", firstFormat.DisplayName, sourceFormat.DisplayName)
+                        : AppText.F("TargetFormatsDiffer", firstFormat.DisplayName, secondFormat.DisplayName));
 
             formatLabel.BackColor = SystemColors.Control;
             formatLabel.ForeColor = allMatch || targetsMatch ? Color.FromArgb(20, 110, 45) : Color.FromArgb(160, 95, 0);
         }
         catch (Exception ex)
         {
-            SetFormatMeter(sourceMeter, false, "Could not read format");
-            SetFormatMeter(firstMeter, false, "Could not read format");
-            SetFormatMeter(secondMeter, false, "Could not read format");
-            formatLabel.Text = $"Could not read device formats: {ex.Message}";
+            SetFormatMeter(sourceMeter, false, AppText.T("CouldNotReadFormatShort"));
+            SetFormatMeter(firstMeter, false, AppText.T("CouldNotReadFormatShort"));
+            SetFormatMeter(secondMeter, false, AppText.T("CouldNotReadFormatShort"));
+            formatLabel.Text = AppText.F("CouldNotReadFormat", ex.Message);
             formatLabel.BackColor = SystemColors.Control;
             formatLabel.ForeColor = Color.FromArgb(170, 40, 40);
         }
@@ -894,27 +1004,27 @@ internal sealed class MainForm : Form
     private static void SetFormatMeter(LevelMeter meter, bool ok, string tooltipText)
     {
         meter.StatusColor = ok ? Color.FromArgb(45, 170, 80) : Color.FromArgb(230, 175, 45);
-        ToolTipProvider.SetToolTip(meter, tooltipText + ". Click to open Windows sound settings.");
+        ToolTipProvider.SetToolTip(meter, $"{tooltipText}. {AppText.T("OpenSoundTooltip")}");
     }
 
     private static string DeviceStateText(AudioDeviceInfo device)
     {
         if (device.IsActive)
         {
-            return $"{device.Name} is active";
+            return AppText.F("DeviceActive", device.Name);
         }
 
         if ((device.State & CoreAudio.DeviceStateUnplugged) != 0)
         {
-            return $"{device.Name} is unplugged";
+            return AppText.F("DeviceUnplugged", device.Name);
         }
 
         if ((device.State & CoreAudio.DeviceStateNotPresent) != 0)
         {
-            return $"{device.Name} is not present";
+            return AppText.F("DeviceNotPresent", device.Name);
         }
 
-        return $"{device.Name} is not active";
+        return AppText.F("DeviceNotActive", device.Name);
     }
 
     private void SyncAppSettings()
@@ -923,7 +1033,7 @@ internal sealed class MainForm : Form
         secondGainBox.Value = Math.Min(secondGainBox.Value, 1.0M);
         PushLiveSettings();
         UpdateFormatWarning();
-        statusLabel.Text = "App sync applied: both targets use the source stream format internally. Change Windows device formats manually if the format lights are still amber.";
+        statusLabel.Text = AppText.T("SyncApplied");
     }
 
     private static void OpenSoundSettings()
@@ -950,61 +1060,16 @@ internal sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Test failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message, AppText.T("TestFailed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
     private void ShowHelp()
     {
         using var form = new InfoForm(
-            "AudioMirror Help",
-            "Help",
-            """
-            Quick setup
-
-            1. In Windows sound settings, choose a silent or unused playback device as the default output. Realtek Digital Output is often a good source.
-            2. Restart the browser or player if captured frames stay at 0.
-            3. In AudioMirror, choose that device as Source.
-            4. Choose the two real speakers or monitors as Target 1 and Target 2.
-            5. Press Start.
-
-            Controls
-
-            Gain
-            Volume multiplier for each target. 1.0 means unchanged. Start with 1.0 and raise Windows or monitor volume first. High gain can distort.
-
-            Delay ms
-            Adds delay to a target. Use it to reduce echo between two devices. Start at 0/0, then try small steps. If echo gets worse, put delay on the other target.
-
-            Split L/R
-            Sends the source left channel to Target 1 as dual-mono and the source right channel to Target 2 as dual-mono. Turn it off for normal stereo mirroring.
-
-            Format lights
-            Green means the selected device format is aligned with the current setup. Amber means there may be resampling or mismatched target formats. Click a light to open Windows sound settings.
-
-            Sync
-            Applies safe app-side defaults. It does not change Windows driver settings.
-
-            Auto restart
-            Watches the WASAPI streams and recreates them if a display sleep or endpoint reset stalls audio. After sleep/resume it refreshes devices for a short time and restarts when the saved outputs are active again.
-
-            Test
-            Opens a built-in speaker test. Left plays Target 1, Right plays Target 2, Both plays both targets, and Loop cycles through them.
-
-            Save
-            Writes settings.json next to the app.
-
-            Autostart
-            Registers AudioMirror in the current user's Windows startup and starts mirroring automatically with saved settings.
-
-            Troubleshooting
-
-            If captured frames stay at 0, the selected Source is not receiving audio. Set it as the Windows default output and restart the player.
-
-            If sound is metallic, set both physical targets to the same Windows format, for example 48000 Hz, 16 bit or 24 bit, and disable audio enhancements/spatial sound.
-
-            If one target is silent, use Test first. If Test is also silent, check the target device volume, monitor audio source, mute state, and cable/input.
-            """);
+            AppText.T("HelpTitle"),
+            AppText.T("HelpHeading"),
+            AppText.T("HelpBody"));
         if (Visible)
         {
             form.ShowDialog(this);
@@ -1018,25 +1083,9 @@ internal sealed class MainForm : Form
     private void ShowAbout()
     {
         using var form = new InfoForm(
-            "About AudioMirror",
-            "AudioMirror",
-            """
-            AudioMirror
-
-            A small Windows WASAPI utility for mirroring one playback stream to two output devices with per-target gain, delay, channel split, and built-in speaker testing.
-
-            Copyright (c) 2026 AudioMirror contributors
-
-            Repository
-            https://github.com/rausNT/audio-mirror-windows
-
-            License
-            MIT License
-
-            Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, subject to the license terms.
-
-            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-            """);
+            AppText.T("AboutTitle"),
+            AppText.T("AboutHeading"),
+            AppText.T("AboutBody"));
         if (Visible)
         {
             form.ShowDialog(this);

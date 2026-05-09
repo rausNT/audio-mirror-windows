@@ -5,11 +5,12 @@ using System.ComponentModel;
 internal sealed class TestForm : Form
 {
     private readonly SpeakerView speakerView = new() { Dock = DockStyle.Fill };
-    private readonly Button leftButton = new() { Text = "Left" };
-    private readonly Button rightButton = new() { Text = "Right" };
-    private readonly Button bothButton = new() { Text = "Both" };
-    private readonly Button stopButton = new() { Text = "Stop" };
-    private readonly CheckBox loopBox = new() { Text = "Loop", AutoSize = true };
+    private readonly Button leftButton = new();
+    private readonly Button rightButton = new();
+    private readonly Button bothButton = new();
+    private readonly Button stopButton = new();
+    private readonly CheckBox loopBox = new() { AutoSize = true };
+    private readonly Label hintLabel = new();
     private readonly System.Windows.Forms.Timer animationTimer = new() { Interval = 40 };
     private readonly System.Windows.Forms.Timer loopTimer = new() { Interval = 1400 };
     private readonly TestTonePlayer player;
@@ -18,7 +19,7 @@ internal sealed class TestForm : Form
 
     public TestForm(AudioDeviceInfo leftDevice, AudioDeviceInfo rightDevice)
     {
-        Text = "AudioMirror Test";
+        Text = AppText.T("TestTitle");
         StartPosition = FormStartPosition.CenterParent;
         Width = 640;
         Height = 360;
@@ -34,17 +35,16 @@ internal sealed class TestForm : Form
         };
         buttons.Controls.AddRange([leftButton, rightButton, bothButton, stopButton, loopBox]);
 
-        var hint = new Label
-        {
-            Text = "Left plays Target 1, Right plays Target 2, Both plays both targets.",
-            Dock = DockStyle.Bottom,
-            Height = 28,
-            Padding = new Padding(12, 4, 12, 4)
-        };
+        hintLabel.Dock = DockStyle.Bottom;
+        hintLabel.Height = 34;
+        hintLabel.Padding = new Padding(12, 4, 12, 4);
+        hintLabel.AutoEllipsis = true;
+
+        ApplyLocalization();
 
         Controls.Add(speakerView);
         Controls.Add(buttons);
-        Controls.Add(hint);
+        Controls.Add(hintLabel);
 
         leftButton.Click += (_, _) => SetMode(TestToneMode.Left, false);
         rightButton.Click += (_, _) => SetMode(TestToneMode.Right, false);
@@ -71,6 +71,24 @@ internal sealed class TestForm : Form
         };
         animationTimer.Tick += (_, _) => speakerView.Tick();
         animationTimer.Start();
+    }
+
+    private void ApplyLocalization()
+    {
+        Text = AppText.T("TestTitle");
+        leftButton.Text = AppText.T("Left");
+        rightButton.Text = AppText.T("Right");
+        bothButton.Text = AppText.T("Both");
+        stopButton.Text = AppText.T("Stop");
+        loopBox.Text = AppText.T("Loop");
+        hintLabel.Text = AppText.T("TestHint");
+
+        foreach (var button in new[] { leftButton, rightButton, bothButton, stopButton })
+        {
+            button.AutoSize = true;
+            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            button.MinimumSize = new Size(72, 28);
+        }
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -133,8 +151,8 @@ internal sealed class TestForm : Form
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             var leftRect = new RectangleF(Width * 0.12f, Height * 0.18f, Width * 0.28f, Height * 0.58f);
             var rightRect = new RectangleF(Width * 0.60f, Height * 0.18f, Width * 0.28f, Height * 0.58f);
-            DrawSpeaker(e.Graphics, leftRect, "LEFT", Mode is TestToneMode.Left or TestToneMode.Both);
-            DrawSpeaker(e.Graphics, rightRect, "RIGHT", Mode is TestToneMode.Right or TestToneMode.Both);
+            DrawSpeaker(e.Graphics, leftRect, AppText.T("Left").ToUpperInvariant(), Mode is TestToneMode.Left or TestToneMode.Both);
+            DrawSpeaker(e.Graphics, rightRect, AppText.T("Right").ToUpperInvariant(), Mode is TestToneMode.Right or TestToneMode.Both);
         }
 
         private void DrawSpeaker(Graphics g, RectangleF area, string label, bool active)

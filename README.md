@@ -68,6 +68,8 @@ Then press `Start`.
 
 ## Controls
 
+- `Language`: switches the app UI between English, Russian, German, French,
+  Spanish, Italian, Portuguese, Polish, Dutch, Chinese, and Japanese.
 - `Gain`: volume multiplier for each target.
   - `1.0` means unchanged.
   - `2.0` is louder.

@@ -13,14 +13,14 @@ internal sealed class AudioDeviceInfo
 
     public override string ToString()
     {
-        var suffix = IsDefault ? " *default" : "";
+        var suffix = IsDefault ? $" *{AppText.T("DefaultSuffix")}" : "";
         if ((State & CoreAudio.DeviceStateUnplugged) != 0)
         {
-            suffix += " (unplugged)";
+            suffix += $" ({AppText.T("UnpluggedSuffix")})";
         }
         else if ((State & CoreAudio.DeviceStateNotPresent) != 0)
         {
-            suffix += " (not present)";
+            suffix += $" ({AppText.T("NotPresentSuffix")})";
         }
 
         return $"{Index}: {Name}{suffix}";
