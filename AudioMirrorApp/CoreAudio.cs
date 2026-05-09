@@ -146,7 +146,6 @@ internal static class CoreAudio
     public const uint DeviceStateDisabled = 0x00000002;
     public const uint DeviceStateNotPresent = 0x00000004;
     public const uint DeviceStateUnplugged = 0x00000008;
-    public const uint DeviceStateUsable = DeviceStateActive | DeviceStateNotPresent | DeviceStateUnplugged;
     public const uint ClsCtxAll = 23;
     public const long RefTimesPerSecond = 10_000_000;
 
@@ -169,10 +168,10 @@ internal static class CoreAudio
     [DllImport("ole32.dll")]
     public static extern void CoTaskMemFree(IntPtr pointer);
 
-    public static IReadOnlyList<AudioDeviceInfo> GetRenderDevices()
+    public static IReadOnlyList<AudioDeviceInfo> GetRenderDevices(IEnumerable<string?>? pinnedDeviceIds = null)
     {
         var enumerator = CreateDeviceEnumerator();
-        enumerator.EnumAudioEndpoints(EDataFlow.Render, DeviceStateUsable, out var collection);
+        enumerator.EnumAudioEndpoints(EDataFlow.Render, DeviceStateActive, out var collection);
         var defaultId = string.Empty;
         try
         {
@@ -186,23 +185,56 @@ internal static class CoreAudio
 
         collection.GetCount(out var count);
         var devices = new List<AudioDeviceInfo>();
+        var knownIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (uint i = 0; i < count; i++)
         {
             collection.Item(i, out var device);
-            device.GetId(out var id);
-            device.GetState(out var state);
-            devices.Add(new AudioDeviceInfo
+            AddRenderDevice(device, defaultId, devices, knownIds);
+        }
+
+        foreach (var pinnedId in pinnedDeviceIds ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(pinnedId) || knownIds.Contains(pinnedId))
             {
-                Index = (int)i,
-                Id = id,
-                Name = GetFriendlyName(device),
-                IsDefault = string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase),
-                State = state,
-                Device = device
-            });
+                continue;
+            }
+
+            try
+            {
+                enumerator.GetDevice(pinnedId, out var pinnedDevice);
+                pinnedDevice.GetState(out var state);
+                if ((state & DeviceStateDisabled) == 0)
+                {
+                    AddRenderDevice(pinnedDevice, defaultId, devices, knownIds);
+                }
+            }
+            catch
+            {
+                // A saved endpoint can vanish completely after GPU/driver changes.
+            }
         }
 
         return devices;
+    }
+
+    private static void AddRenderDevice(IMMDevice device, string defaultId, List<AudioDeviceInfo> devices, ISet<string> knownIds)
+    {
+        device.GetId(out var id);
+        if (!knownIds.Add(id))
+        {
+            return;
+        }
+
+        device.GetState(out var state);
+        devices.Add(new AudioDeviceInfo
+        {
+            Index = devices.Count,
+            Id = id,
+            Name = GetFriendlyName(device),
+            IsDefault = string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase),
+            State = state,
+            Device = device
+        });
     }
 
     public static IAudioClient ActivateAudioClient(IMMDevice device)

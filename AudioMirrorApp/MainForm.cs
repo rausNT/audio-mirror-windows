@@ -346,7 +346,7 @@ internal sealed class MainForm : Form
             currentSecondId = null;
         }
 
-        devices = CoreAudio.GetRenderDevices();
+        devices = CoreAudio.GetRenderDevices(PinnedDeviceIds(currentSourceId, currentFirstId, currentSecondId));
         FillDeviceBox(sourceBox);
         FillDeviceBox(firstTargetBox);
         FillDeviceBox(secondTargetBox);
@@ -365,6 +365,16 @@ internal sealed class MainForm : Form
         {
             box.Items.Add(device);
         }
+    }
+
+    private IEnumerable<string?> PinnedDeviceIds(string? preferredSourceId, string? preferredFirstId, string? preferredSecondId)
+    {
+        yield return preferredSourceId;
+        yield return preferredFirstId;
+        yield return preferredSecondId;
+        yield return settings.SourceDeviceId;
+        yield return settings.FirstTargetDeviceId;
+        yield return settings.SecondTargetDeviceId;
     }
 
     private void ApplySettingsToControls(string? preferredSourceId = null, string? preferredFirstId = null, string? preferredSecondId = null)
