@@ -87,7 +87,9 @@ Then press `Start`.
   `Loop`. It plays directly to the selected targets and animates the active
   speaker.
 - `Auto restart`: watches the audio stream and recreates WASAPI streams if a
-  display sleep, monitor power-off, or endpoint reset stalls audio.
+  display sleep, monitor power-off, or endpoint reset stalls audio. After
+  sleep/resume it keeps refreshing devices briefly and restarts when the saved
+  source/targets are active again.
 - `Help`: opens the built-in user guide.
 - `About`: shows the app name, repository, copyright, and MIT license summary.
 

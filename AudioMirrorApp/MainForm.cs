@@ -29,6 +29,7 @@ internal sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
     private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 60 };
     private readonly System.Windows.Forms.Timer watchdogTimer = new() { Interval = 2000 };
+    private readonly System.Windows.Forms.Timer deviceRefreshTimer = new() { Interval = 2000 };
     private readonly MenuStrip menuStrip = new();
     private readonly ToolStripMenuItem fileMenu = new("&File");
     private readonly ToolStripMenuItem actionsMenu = new("&Actions");
@@ -54,10 +55,13 @@ internal sealed class MainForm : Form
     private readonly ToolStripMenuItem traySoundItem = new("&Sound settings");
     private readonly ToolStripMenuItem trayHelpItem = new("&Help");
     private readonly ToolStripMenuItem trayExitItem = new("E&xit");
-    private readonly AppSettings settings;
+    private AppSettings settings;
     private readonly bool startAfterShown;
     private bool allowExit;
     private bool restarting;
+    private bool restartAfterDeviceRefresh;
+    private int pendingDeviceRefreshTicks;
+    private string deviceRefreshReason = "device change";
     private long lastWatchdogCapturedFrames;
     private long lastWatchdogWrittenFrames;
     private int stalledWatchdogTicks;
@@ -100,7 +104,20 @@ internal sealed class MainForm : Form
         notifyIcon.Visible = false;
         notifyIcon.Dispose();
         engine?.Dispose();
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= SystemEventsPowerModeChanged;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= SystemEventsDisplaySettingsChanged;
         base.OnFormClosing(e);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        const int wmDeviceChange = 0x0219;
+        base.WndProc(ref m);
+
+        if (m.Msg == wmDeviceChange)
+        {
+            ScheduleDeviceRefresh("audio device change", engine is not null);
+        }
     }
 
     private void BuildLayout()
@@ -300,6 +317,9 @@ internal sealed class MainForm : Form
         statsTimer.Tick += (_, _) => UpdateStatus();
         meterTimer.Tick += (_, _) => UpdateMeters();
         watchdogTimer.Tick += (_, _) => WatchdogTick();
+        deviceRefreshTimer.Tick += (_, _) => DeviceRefreshTick();
+        Microsoft.Win32.SystemEvents.PowerModeChanged += SystemEventsPowerModeChanged;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += SystemEventsDisplaySettingsChanged;
         Resize += (_, _) =>
         {
             if (WindowState == FormWindowState.Minimized)
@@ -311,13 +331,31 @@ internal sealed class MainForm : Form
 
     private void RefreshDevices()
     {
+        RefreshDevices(preserveCurrentSelection: true, updateStatus: true);
+    }
+
+    private void RefreshDevices(bool preserveCurrentSelection, bool updateStatus)
+    {
+        var currentSourceId = preserveCurrentSelection ? SelectedDeviceId(sourceBox) : null;
+        var currentFirstId = preserveCurrentSelection ? SelectedDeviceId(firstTargetBox) : null;
+        var currentSecondId = preserveCurrentSelection ? SelectedDeviceId(secondTargetBox) : null;
+        if (!DistinctDeviceIds(currentSourceId, currentFirstId, currentSecondId))
+        {
+            currentSourceId = null;
+            currentFirstId = null;
+            currentSecondId = null;
+        }
+
         devices = CoreAudio.GetRenderDevices();
         FillDeviceBox(sourceBox);
         FillDeviceBox(firstTargetBox);
         FillDeviceBox(secondTargetBox);
-        ApplySettingsToControls();
+        ApplySettingsToControls(currentSourceId, currentFirstId, currentSecondId);
         UpdateFormatWarning();
-        statusLabel.Text = "Devices refreshed.";
+        if (updateStatus)
+        {
+            statusLabel.Text = $"Devices refreshed: {devices.Count} playback endpoints.";
+        }
     }
 
     private void FillDeviceBox(ComboBox box)
@@ -329,11 +367,11 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void ApplySettingsToControls()
+    private void ApplySettingsToControls(string? preferredSourceId = null, string? preferredFirstId = null, string? preferredSecondId = null)
     {
-        SelectIndex(sourceBox, settings.SourceIndex);
-        SelectIndex(firstTargetBox, settings.FirstTargetIndex);
-        SelectIndex(secondTargetBox, settings.SecondTargetIndex);
+        SelectDevice(sourceBox, preferredSourceId, settings.SourceDeviceId, settings.SourceDeviceName, settings.SourceIndex);
+        SelectDevice(firstTargetBox, preferredFirstId, settings.FirstTargetDeviceId, settings.FirstTargetDeviceName, settings.FirstTargetIndex);
+        SelectDevice(secondTargetBox, preferredSecondId, settings.SecondTargetDeviceId, settings.SecondTargetDeviceName, settings.SecondTargetIndex);
         firstGainBox.Value = ClampDecimal((decimal)settings.FirstGain, firstGainBox.Minimum, firstGainBox.Maximum);
         secondGainBox.Value = ClampDecimal((decimal)settings.SecondGain, secondGainBox.Minimum, secondGainBox.Maximum);
         firstDelayBox.Value = ClampDecimal(settings.FirstDelayMs, firstDelayBox.Minimum, firstDelayBox.Maximum);
@@ -349,21 +387,95 @@ internal sealed class MainForm : Form
         return Math.Min(Math.Max(value, minimum), maximum);
     }
 
-    private static void SelectIndex(ComboBox box, int deviceIndex)
+    private static void SelectDevice(ComboBox box, string? preferredId, string? savedId, string? savedName, int savedIndex)
     {
-        for (var i = 0; i < box.Items.Count; i++)
+        if (TrySelectById(box, preferredId) ||
+            TrySelectById(box, savedId) ||
+            TrySelectByName(box, savedName) ||
+            TrySelectByIndex(box, savedIndex))
         {
-            if (box.Items[i] is AudioDeviceInfo device && device.Index == deviceIndex)
-            {
-                box.SelectedIndex = i;
-                return;
-            }
+            return;
         }
 
         if (box.Items.Count > 0)
         {
             box.SelectedIndex = 0;
         }
+        else
+        {
+            box.SelectedIndex = -1;
+        }
+    }
+
+    private static bool TrySelectById(ComboBox box, string? deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return false;
+        }
+
+        for (var i = 0; i < box.Items.Count; i++)
+        {
+            if (box.Items[i] is AudioDeviceInfo device && string.Equals(device.Id, deviceId, StringComparison.OrdinalIgnoreCase))
+            {
+                box.SelectedIndex = i;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySelectByName(ComboBox box, string? deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(deviceName))
+        {
+            return false;
+        }
+
+        for (var i = 0; i < box.Items.Count; i++)
+        {
+            if (box.Items[i] is AudioDeviceInfo device && string.Equals(device.Name, deviceName, StringComparison.OrdinalIgnoreCase))
+            {
+                box.SelectedIndex = i;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySelectByIndex(ComboBox box, int deviceIndex)
+    {
+        for (var i = 0; i < box.Items.Count; i++)
+        {
+            if (box.Items[i] is AudioDeviceInfo device && device.Index == deviceIndex)
+            {
+                box.SelectedIndex = i;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? SelectedDeviceId(ComboBox box)
+    {
+        return box.SelectedItem is AudioDeviceInfo device ? device.Id : null;
+    }
+
+    private static bool DistinctDeviceIds(string? first, string? second, string? third)
+    {
+        if (string.IsNullOrWhiteSpace(first) ||
+            string.IsNullOrWhiteSpace(second) ||
+            string.IsNullOrWhiteSpace(third))
+        {
+            return false;
+        }
+
+        return !string.Equals(first, second, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(first, third, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(second, third, StringComparison.OrdinalIgnoreCase);
     }
 
     private void StartMirror()
@@ -374,6 +486,10 @@ internal sealed class MainForm : Form
             var source = SelectedDevice(sourceBox);
             var firstTarget = SelectedDevice(firstTargetBox);
             var secondTarget = SelectedDevice(secondTargetBox);
+            EnsureActive(source, "Source");
+            EnsureActive(firstTarget, "Target 1");
+            EnsureActive(secondTarget, "Target 2");
+            settings = ReadSettingsFromControls();
             engine = new WasapiMirrorEngine(
                 source,
                 firstTarget,
@@ -427,6 +543,7 @@ internal sealed class MainForm : Form
     private void SaveSettingsFromControls()
     {
         var snapshot = ReadSettingsFromControls();
+        settings = snapshot;
         SettingsStore.Save(snapshot);
         statusLabel.Text = $"Saved: {SettingsStore.SettingsPath}";
     }
@@ -438,6 +555,12 @@ internal sealed class MainForm : Form
             SourceIndex = SelectedDevice(sourceBox).Index,
             FirstTargetIndex = SelectedDevice(firstTargetBox).Index,
             SecondTargetIndex = SelectedDevice(secondTargetBox).Index,
+            SourceDeviceId = SelectedDevice(sourceBox).Id,
+            FirstTargetDeviceId = SelectedDevice(firstTargetBox).Id,
+            SecondTargetDeviceId = SelectedDevice(secondTargetBox).Id,
+            SourceDeviceName = SelectedDevice(sourceBox).Name,
+            FirstTargetDeviceName = SelectedDevice(firstTargetBox).Name,
+            SecondTargetDeviceName = SelectedDevice(secondTargetBox).Name,
             FirstGain = (double)firstGainBox.Value,
             SecondGain = (double)secondGainBox.Value,
             FirstDelayMs = (int)firstDelayBox.Value,
@@ -455,6 +578,14 @@ internal sealed class MainForm : Form
         }
 
         throw new InvalidOperationException("Select all devices first.");
+    }
+
+    private static void EnsureActive(AudioDeviceInfo device, string role)
+    {
+        if (!device.IsActive)
+        {
+            throw new InvalidOperationException($"{role} is visible in Windows but is not active yet: {device.Name}. Wake the display, then press Refresh or wait for auto refresh.");
+        }
     }
 
     private void UpdateStatus()
@@ -559,6 +690,104 @@ internal sealed class MainForm : Form
         stalledWatchdogTicks = 0;
     }
 
+    private void SystemEventsPowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == Microsoft.Win32.PowerModes.Suspend)
+        {
+            if (engine is not null)
+            {
+                restartAfterDeviceRefresh = true;
+                StopMirror();
+                statusLabel.Text = "Paused for system sleep. AudioMirror will refresh devices after resume.";
+            }
+
+            return;
+        }
+
+        if (e.Mode == Microsoft.Win32.PowerModes.Resume)
+        {
+            ScheduleDeviceRefresh("system resume", restartAfterDeviceRefresh || engine is not null);
+        }
+    }
+
+    private void SystemEventsDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        ScheduleDeviceRefresh("display change", engine is not null);
+    }
+
+    private void ScheduleDeviceRefresh(string reason, bool restartWhenReady)
+    {
+        deviceRefreshReason = reason;
+        pendingDeviceRefreshTicks = 15;
+        restartAfterDeviceRefresh |= restartWhenReady;
+        deviceRefreshTimer.Stop();
+        deviceRefreshTimer.Start();
+
+        if (restartWhenReady)
+        {
+            statusLabel.Text = $"Waiting for audio devices after {reason}...";
+        }
+    }
+
+    private void DeviceRefreshTick()
+    {
+        if (pendingDeviceRefreshTicks <= 0)
+        {
+            deviceRefreshTimer.Stop();
+            restartAfterDeviceRefresh = false;
+            return;
+        }
+
+        pendingDeviceRefreshTicks--;
+        try
+        {
+            RefreshDevices(preserveCurrentSelection: !restartAfterDeviceRefresh, updateStatus: false);
+
+            if (!restartAfterDeviceRefresh)
+            {
+                statusLabel.Text = $"Devices refreshed after {deviceRefreshReason}: {devices.Count} playback endpoints.";
+                return;
+            }
+
+            if (!SelectedDevicesReady())
+            {
+                statusLabel.Text = $"Waiting for selected audio devices after {deviceRefreshReason}... {devices.Count} endpoint(s) visible.";
+                return;
+            }
+
+            if (engine is not null)
+            {
+                StopMirror();
+            }
+
+            StartMirror();
+            restartAfterDeviceRefresh = false;
+            deviceRefreshTimer.Stop();
+            statusLabel.Text = $"AudioMirror restarted after {deviceRefreshReason}.";
+        }
+        catch (Exception ex)
+        {
+            statusLabel.Text = $"Device refresh after {deviceRefreshReason} failed: {ex.Message}";
+        }
+    }
+
+    private bool SelectedDevicesReady()
+    {
+        if (sourceBox.SelectedItem is not AudioDeviceInfo source ||
+            firstTargetBox.SelectedItem is not AudioDeviceInfo firstTarget ||
+            secondTargetBox.SelectedItem is not AudioDeviceInfo secondTarget)
+        {
+            return false;
+        }
+
+        return source.IsActive &&
+            firstTarget.IsActive &&
+            secondTarget.IsActive &&
+            !string.Equals(source.Id, firstTarget.Id, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(source.Id, secondTarget.Id, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(firstTarget.Id, secondTarget.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
     private async void RestartMirror(string reason)
     {
         if (restarting)
@@ -609,6 +838,17 @@ internal sealed class MainForm : Form
                 return;
             }
 
+            if (!source.IsActive || !firstTarget.IsActive || !secondTarget.IsActive)
+            {
+                SetFormatMeter(sourceMeter, source.IsActive, $"Source: {DeviceStateText(source)}");
+                SetFormatMeter(firstMeter, firstTarget.IsActive, $"Target 1: {DeviceStateText(firstTarget)}");
+                SetFormatMeter(secondMeter, secondTarget.IsActive, $"Target 2: {DeviceStateText(secondTarget)}");
+                formatLabel.Text = "Some selected devices are visible but not active yet. Wake the display, then press Refresh or wait for auto refresh.";
+                formatLabel.BackColor = SystemColors.Control;
+                formatLabel.ForeColor = Color.FromArgb(160, 95, 0);
+                return;
+            }
+
             var sourceFormat = CoreAudio.GetMixFormat(source.Device);
             var firstFormat = CoreAudio.GetMixFormat(firstTarget.Device);
             var secondFormat = CoreAudio.GetMixFormat(secondTarget.Device);
@@ -645,6 +885,26 @@ internal sealed class MainForm : Form
     {
         meter.StatusColor = ok ? Color.FromArgb(45, 170, 80) : Color.FromArgb(230, 175, 45);
         ToolTipProvider.SetToolTip(meter, tooltipText + ". Click to open Windows sound settings.");
+    }
+
+    private static string DeviceStateText(AudioDeviceInfo device)
+    {
+        if (device.IsActive)
+        {
+            return $"{device.Name} is active";
+        }
+
+        if ((device.State & CoreAudio.DeviceStateUnplugged) != 0)
+        {
+            return $"{device.Name} is unplugged";
+        }
+
+        if ((device.State & CoreAudio.DeviceStateNotPresent) != 0)
+        {
+            return $"{device.Name} is not present";
+        }
+
+        return $"{device.Name} is not active";
     }
 
     private void SyncAppSettings()
@@ -716,7 +976,7 @@ internal sealed class MainForm : Form
             Applies safe app-side defaults. It does not change Windows driver settings.
 
             Auto restart
-            Watches the WASAPI streams and recreates them if a display sleep or endpoint reset stalls audio.
+            Watches the WASAPI streams and recreates them if a display sleep or endpoint reset stalls audio. After sleep/resume it refreshes devices for a short time and restarts when the saved outputs are active again.
 
             Test
             Opens a built-in speaker test. Left plays Target 1, Right plays Target 2, Both plays both targets, and Loop cycles through them.

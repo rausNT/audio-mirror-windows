@@ -143,6 +143,10 @@ internal static class CoreAudio
     }
 
     public const uint DeviceStateActive = 0x00000001;
+    public const uint DeviceStateDisabled = 0x00000002;
+    public const uint DeviceStateNotPresent = 0x00000004;
+    public const uint DeviceStateUnplugged = 0x00000008;
+    public const uint DeviceStateUsable = DeviceStateActive | DeviceStateNotPresent | DeviceStateUnplugged;
     public const uint ClsCtxAll = 23;
     public const long RefTimesPerSecond = 10_000_000;
 
@@ -168,9 +172,17 @@ internal static class CoreAudio
     public static IReadOnlyList<AudioDeviceInfo> GetRenderDevices()
     {
         var enumerator = CreateDeviceEnumerator();
-        enumerator.EnumAudioEndpoints(EDataFlow.Render, DeviceStateActive, out var collection);
-        enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Console, out var defaultDevice);
-        defaultDevice.GetId(out var defaultId);
+        enumerator.EnumAudioEndpoints(EDataFlow.Render, DeviceStateUsable, out var collection);
+        var defaultId = string.Empty;
+        try
+        {
+            enumerator.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Console, out var defaultDevice);
+            defaultDevice.GetId(out defaultId);
+        }
+        catch
+        {
+            // Windows can briefly have no default render endpoint while displays wake up.
+        }
 
         collection.GetCount(out var count);
         var devices = new List<AudioDeviceInfo>();
@@ -178,12 +190,14 @@ internal static class CoreAudio
         {
             collection.Item(i, out var device);
             device.GetId(out var id);
+            device.GetState(out var state);
             devices.Add(new AudioDeviceInfo
             {
                 Index = (int)i,
                 Id = id,
                 Name = GetFriendlyName(device),
                 IsDefault = string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase),
+                State = state,
                 Device = device
             });
         }
