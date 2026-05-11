@@ -7,6 +7,7 @@ internal sealed class TestForm : Form
     private readonly SpeakerView speakerView = new() { Dock = DockStyle.Fill };
     private readonly Button leftButton = new();
     private readonly Button rightButton = new();
+    private readonly Button thirdButton = new();
     private readonly Button bothButton = new();
     private readonly Button stopButton = new();
     private readonly CheckBox loopBox = new() { AutoSize = true };
@@ -14,17 +15,22 @@ internal sealed class TestForm : Form
     private readonly System.Windows.Forms.Timer animationTimer = new() { Interval = 40 };
     private readonly System.Windows.Forms.Timer loopTimer = new() { Interval = 1400 };
     private readonly TestTonePlayer player;
-    private readonly TestToneMode[] loopModes = [TestToneMode.Left, TestToneMode.Right, TestToneMode.Both];
+    private readonly TestToneMode[] loopModes;
+    private readonly bool hasThird;
     private int loopIndex;
 
-    public TestForm(AudioDeviceInfo leftDevice, AudioDeviceInfo rightDevice)
+    public TestForm(AudioDeviceInfo leftDevice, AudioDeviceInfo rightDevice, AudioDeviceInfo? thirdDevice)
     {
+        hasThird = thirdDevice is not null;
+        loopModes = hasThird
+            ? [TestToneMode.Left, TestToneMode.Right, TestToneMode.Third, TestToneMode.Both]
+            : [TestToneMode.Left, TestToneMode.Right, TestToneMode.Both];
         Text = AppText.T("TestTitle");
         StartPosition = FormStartPosition.CenterParent;
         Width = 640;
         Height = 360;
         MinimumSize = new Size(520, 300);
-        player = new TestTonePlayer(leftDevice, rightDevice);
+        player = new TestTonePlayer(leftDevice, rightDevice, thirdDevice);
 
         var buttons = new FlowLayoutPanel
         {
@@ -33,7 +39,14 @@ internal sealed class TestForm : Form
             Padding = new Padding(12, 10, 12, 6),
             FlowDirection = FlowDirection.LeftToRight
         };
-        buttons.Controls.AddRange([leftButton, rightButton, bothButton, stopButton, loopBox]);
+        buttons.Controls.Add(leftButton);
+        buttons.Controls.Add(rightButton);
+        if (hasThird)
+        {
+            buttons.Controls.Add(thirdButton);
+        }
+
+        buttons.Controls.AddRange([bothButton, stopButton, loopBox]);
 
         hintLabel.Dock = DockStyle.Bottom;
         hintLabel.Height = 34;
@@ -41,6 +54,7 @@ internal sealed class TestForm : Form
         hintLabel.AutoEllipsis = true;
 
         ApplyLocalization();
+        speakerView.HasThird = hasThird;
 
         Controls.Add(speakerView);
         Controls.Add(buttons);
@@ -48,6 +62,7 @@ internal sealed class TestForm : Form
 
         leftButton.Click += (_, _) => SetMode(TestToneMode.Left, false);
         rightButton.Click += (_, _) => SetMode(TestToneMode.Right, false);
+        thirdButton.Click += (_, _) => SetMode(TestToneMode.Third, false);
         bothButton.Click += (_, _) => SetMode(TestToneMode.Both, false);
         stopButton.Click += (_, _) => SetMode(TestToneMode.None, false);
         loopBox.CheckedChanged += (_, _) =>
@@ -78,12 +93,13 @@ internal sealed class TestForm : Form
         Text = AppText.T("TestTitle");
         leftButton.Text = AppText.T("Left");
         rightButton.Text = AppText.T("Right");
+        thirdButton.Text = AppText.T("Third");
         bothButton.Text = AppText.T("Both");
         stopButton.Text = AppText.T("Stop");
         loopBox.Text = AppText.T("Loop");
         hintLabel.Text = AppText.T("TestHint");
 
-        foreach (var button in new[] { leftButton, rightButton, bothButton, stopButton })
+        foreach (var button in new[] { leftButton, rightButton, thirdButton, bothButton, stopButton })
         {
             button.AutoSize = true;
             button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
@@ -115,6 +131,7 @@ internal sealed class TestForm : Form
     {
         private float pulse;
         private TestToneMode mode;
+        private bool hasThird;
 
         public SpeakerView()
         {
@@ -134,6 +151,17 @@ internal sealed class TestForm : Form
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool HasThird
+        {
+            get => hasThird;
+            set
+            {
+                hasThird = value;
+                Invalidate();
+            }
+        }
+
         public void Tick()
         {
             pulse += 0.16f;
@@ -149,10 +177,19 @@ internal sealed class TestForm : Form
         {
             base.OnPaint(e);
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            var leftRect = new RectangleF(Width * 0.12f, Height * 0.18f, Width * 0.28f, Height * 0.58f);
-            var rightRect = new RectangleF(Width * 0.60f, Height * 0.18f, Width * 0.28f, Height * 0.58f);
+            var leftRect = hasThird
+                ? new RectangleF(Width * 0.06f, Height * 0.18f, Width * 0.24f, Height * 0.58f)
+                : new RectangleF(Width * 0.12f, Height * 0.18f, Width * 0.28f, Height * 0.58f);
+            var rightRect = hasThird
+                ? new RectangleF(Width * 0.38f, Height * 0.18f, Width * 0.24f, Height * 0.58f)
+                : new RectangleF(Width * 0.60f, Height * 0.18f, Width * 0.28f, Height * 0.58f);
             DrawSpeaker(e.Graphics, leftRect, AppText.T("Left").ToUpperInvariant(), Mode is TestToneMode.Left or TestToneMode.Both);
             DrawSpeaker(e.Graphics, rightRect, AppText.T("Right").ToUpperInvariant(), Mode is TestToneMode.Right or TestToneMode.Both);
+            if (hasThird)
+            {
+                var thirdRect = new RectangleF(Width * 0.70f, Height * 0.18f, Width * 0.24f, Height * 0.58f);
+                DrawSpeaker(e.Graphics, thirdRect, AppText.T("Third").ToUpperInvariant(), Mode is TestToneMode.Third or TestToneMode.Both);
+            }
         }
 
         private void DrawSpeaker(Graphics g, RectangleF area, string label, bool active)

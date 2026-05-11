@@ -7,6 +7,7 @@ internal enum TestToneMode
     None,
     Left,
     Right,
+    Third,
     Both
 }
 
@@ -135,13 +136,19 @@ internal sealed class TestTonePlayer : IDisposable
     private readonly CancellationTokenSource cancellation = new();
     private readonly RenderOutput left;
     private readonly RenderOutput right;
+    private readonly RenderOutput? third;
     private readonly Task worker;
     private volatile TestToneMode mode;
 
-    public TestTonePlayer(AudioDeviceInfo leftDevice, AudioDeviceInfo rightDevice)
+    public TestTonePlayer(AudioDeviceInfo leftDevice, AudioDeviceInfo rightDevice, AudioDeviceInfo? thirdDevice)
     {
         left = new RenderOutput(leftDevice);
         right = new RenderOutput(rightDevice);
+        if (thirdDevice is not null)
+        {
+            third = new RenderOutput(thirdDevice);
+        }
+
         worker = Task.Run(RenderLoop);
     }
 
@@ -164,6 +171,7 @@ internal sealed class TestTonePlayer : IDisposable
 
         left.Stop();
         right.Stop();
+        third?.Stop();
         cancellation.Dispose();
     }
 
@@ -180,6 +188,11 @@ internal sealed class TestTonePlayer : IDisposable
             if (current is TestToneMode.Right or TestToneMode.Both)
             {
                 right.WriteTone(current == TestToneMode.Both ? 523.25 : 660.0, 0.16);
+            }
+
+            if (third is not null && current is (TestToneMode.Third or TestToneMode.Both))
+            {
+                third.WriteTone(current == TestToneMode.Both ? 523.25 : 880.0, 0.16);
             }
 
             Thread.Sleep(5);

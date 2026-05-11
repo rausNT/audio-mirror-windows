@@ -1,7 +1,7 @@
 # AudioMirror
 
 AudioMirror is a small Windows 11 WASAPI utility for playing one audio stream
-through two playback devices at the same time.
+through two or three playback devices at the same time.
 
 It was built for a practical setup with two monitors that both expose HDMI/DP
 audio devices, but it can also be useful for USB speakers and other Windows
@@ -9,8 +9,9 @@ playback endpoints.
 
 AudioMirror does not install a driver, does not create a virtual audio device,
 and does not try to be a full audio mixer. It captures loopback audio from one
-selected playback device and renders it to two selected playback devices with
-per-output delay and gain controls.
+selected playback device and renders it to two selected playback devices, with
+an optional third target for a USB soundbar or another output. Each target has
+its own delay and gain controls.
 
 ## Why
 
@@ -72,6 +73,7 @@ Then press `Start`.
 
 - `Language`: switches the app UI between English, Russian, German, French,
   Spanish, Italian, Portuguese, Polish, Dutch, Chinese, and Japanese.
+- `Target 3`: optional third output for a soundbar or another playback device.
 - `Gain`: volume multiplier for each target.
   - `1.0` means unchanged.
   - `2.0` is louder.
@@ -82,14 +84,13 @@ Then press `Start`.
 - `Split L/R`: sends the source left channel to `Target 1` as dual-mono and
   the source right channel to `Target 2` as dual-mono. Turn it off for normal
   stereo mirroring.
-- Default gain is `1.0` for both targets and default delay is `0 ms` for both
-  targets.
+- Default gain is `1.0` and default delay is `0 ms` for all targets.
 - `Save`: writes `settings.json` next to the app.
 - `Autostart`: registers the app in the current user's Windows startup and
   starts mirroring automatically using saved settings.
-- `Test`: opens a built-in speaker test with `Left`, `Right`, `Both`, and
-  `Loop`. It plays directly to the selected targets and animates the active
-  speaker.
+- `Test`: opens a built-in speaker test with `Left`, `Right`, optional `Third`,
+  `Both`, and `Loop`. It plays directly to the selected targets and animates
+  the active speaker.
 - `Auto restart`: watches the audio stream and recreates WASAPI streams if a
   display sleep, monitor power-off, or endpoint reset stalls audio. After
   sleep/resume it keeps refreshing devices briefly and restarts when the saved

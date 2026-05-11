@@ -7,19 +7,24 @@ internal sealed class MainForm : Form
     private readonly ComboBox sourceBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox firstTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox secondTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox thirdTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly LevelMeter sourceMeter = new();
     private readonly LevelMeter firstMeter = new();
     private readonly LevelMeter secondMeter = new();
+    private readonly LevelMeter thirdMeter = new();
     private readonly Label sourceLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) };
     private readonly Label firstTargetLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) };
     private readonly Label secondTargetLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 6, 0, 0) };
+    private readonly CheckBox thirdTargetEnabledBox = new() { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(0, 3, 0, 0) };
     private readonly Label gainLabel = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label delayLabel = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label hintLabel = new() { AutoSize = true, Padding = new Padding(0, 0, 0, 8) };
     private readonly NumericUpDown firstGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown secondGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
+    private readonly NumericUpDown thirdGainBox = new() { DecimalPlaces = 2, Increment = 0.25M, Minimum = 0.01M, Maximum = 8M, Width = 90 };
     private readonly NumericUpDown firstDelayBox = new() { Minimum = 0, Maximum = 2000, Increment = 5, Width = 90 };
     private readonly NumericUpDown secondDelayBox = new() { Minimum = 0, Maximum = 2000, Increment = 5, Width = 90 };
+    private readonly NumericUpDown thirdDelayBox = new() { Minimum = 0, Maximum = 2000, Increment = 5, Width = 90 };
     private readonly Button refreshButton = new() { Text = "Refresh" };
     private readonly Button startButton = new() { Text = "Start" };
     private readonly Button stopButton = new() { Text = "Stop", Enabled = false };
@@ -82,8 +87,8 @@ internal sealed class MainForm : Form
         Text = $"AudioMirror {AppVersion.Display}";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(760, 420);
-        MinimumSize = new Size(760, 430);
+        ClientSize = new Size(840, 470);
+        MinimumSize = new Size(840, 470);
 
         settings = SettingsStore.Load();
         AppText.SetLanguage(settings.LanguageCode);
@@ -152,7 +157,7 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Top,
             ColumnCount = 5,
-            RowCount = 4,
+            RowCount = 5,
             AutoSize = true
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
@@ -164,12 +169,13 @@ internal sealed class MainForm : Form
         AddRow(grid, 0, sourceMeter, sourceLabel, sourceBox, null, null);
         AddRow(grid, 1, firstMeter, firstTargetLabel, firstTargetBox, firstGainBox, firstDelayBox);
         AddRow(grid, 2, secondMeter, secondTargetLabel, secondTargetBox, secondGainBox, secondDelayBox);
+        AddRow(grid, 3, thirdMeter, thirdTargetEnabledBox, thirdTargetBox, thirdGainBox, thirdDelayBox);
 
-        grid.Controls.Add(new Label { Text = "", AutoSize = true }, 0, 3);
-        grid.Controls.Add(new Label { Text = "", AutoSize = true }, 1, 3);
-        grid.Controls.Add(new Label { Text = "", AutoSize = true }, 2, 3);
-        grid.Controls.Add(gainLabel, 3, 3);
-        grid.Controls.Add(delayLabel, 4, 3);
+        grid.Controls.Add(new Label { Text = "", AutoSize = true }, 0, 4);
+        grid.Controls.Add(new Label { Text = "", AutoSize = true }, 1, 4);
+        grid.Controls.Add(new Label { Text = "", AutoSize = true }, 2, 4);
+        grid.Controls.Add(gainLabel, 3, 4);
+        grid.Controls.Add(delayLabel, 4, 4);
 
         var buttons = new FlowLayoutPanel
         {
@@ -260,7 +266,7 @@ internal sealed class MainForm : Form
         notifyIcon.Visible = true;
     }
 
-    private static void AddRow(TableLayoutPanel grid, int row, LevelMeter meter, Label label, Control deviceControl, Control? gainControl, Control? delayControl)
+    private static void AddRow(TableLayoutPanel grid, int row, LevelMeter meter, Control label, Control deviceControl, Control? gainControl, Control? delayControl)
     {
         grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         meter.Margin = new Padding(0, 5, 6, 0);
@@ -319,13 +325,23 @@ internal sealed class MainForm : Form
         sourceMeter.Click += (_, _) => OpenSoundSettings();
         firstMeter.Click += (_, _) => OpenSoundSettings();
         secondMeter.Click += (_, _) => OpenSoundSettings();
+        thirdMeter.Click += (_, _) => OpenSoundSettings();
         sourceBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         firstTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         secondTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
+        thirdTargetBox.SelectedIndexChanged += (_, _) => UpdateFormatWarning();
         firstGainBox.ValueChanged += (_, _) => PushLiveSettings();
         secondGainBox.ValueChanged += (_, _) => PushLiveSettings();
+        thirdGainBox.ValueChanged += (_, _) => PushLiveSettings();
         firstDelayBox.ValueChanged += (_, _) => PushLiveSettings();
         secondDelayBox.ValueChanged += (_, _) => PushLiveSettings();
+        thirdDelayBox.ValueChanged += (_, _) => PushLiveSettings();
+        thirdTargetEnabledBox.CheckedChanged += (_, _) =>
+        {
+            UpdateThirdTargetState();
+            PushLiveSettings();
+            UpdateFormatWarning();
+        };
         splitLeftRightBox.CheckedChanged += (_, _) =>
         {
             if (menuSplitItem.Checked != splitLeftRightBox.Checked)
@@ -410,6 +426,7 @@ internal sealed class MainForm : Form
         sourceLabel.Text = AppText.T("Source");
         firstTargetLabel.Text = AppText.T("Target1");
         secondTargetLabel.Text = AppText.T("Target2");
+        thirdTargetEnabledBox.Text = AppText.T("Target3");
         gainLabel.Text = AppText.T("Gain");
         delayLabel.Text = AppText.T("DelayMs");
         hintLabel.Text = AppText.T("Hint");
@@ -448,18 +465,21 @@ internal sealed class MainForm : Form
         var currentSourceId = preserveCurrentSelection ? SelectedDeviceId(sourceBox) : null;
         var currentFirstId = preserveCurrentSelection ? SelectedDeviceId(firstTargetBox) : null;
         var currentSecondId = preserveCurrentSelection ? SelectedDeviceId(secondTargetBox) : null;
-        if (!DistinctDeviceIds(currentSourceId, currentFirstId, currentSecondId))
+        var currentThirdId = preserveCurrentSelection ? SelectedDeviceId(thirdTargetBox) : null;
+        if (!DistinctDeviceIds(currentSourceId, currentFirstId, currentSecondId, thirdTargetEnabledBox.Checked ? currentThirdId : null))
         {
             currentSourceId = null;
             currentFirstId = null;
             currentSecondId = null;
+            currentThirdId = null;
         }
 
-        devices = CoreAudio.GetRenderDevices(PinnedDeviceIds(currentSourceId, currentFirstId, currentSecondId));
+        devices = CoreAudio.GetRenderDevices(PinnedDeviceIds(currentSourceId, currentFirstId, currentSecondId, currentThirdId));
         FillDeviceBox(sourceBox);
         FillDeviceBox(firstTargetBox);
         FillDeviceBox(secondTargetBox);
-        ApplySettingsToControls(currentSourceId, currentFirstId, currentSecondId);
+        FillDeviceBox(thirdTargetBox);
+        ApplySettingsToControls(currentSourceId, currentFirstId, currentSecondId, currentThirdId);
         UpdateFormatWarning();
         if (updateStatus)
         {
@@ -476,28 +496,35 @@ internal sealed class MainForm : Form
         }
     }
 
-    private IEnumerable<string?> PinnedDeviceIds(string? preferredSourceId, string? preferredFirstId, string? preferredSecondId)
+    private IEnumerable<string?> PinnedDeviceIds(string? preferredSourceId, string? preferredFirstId, string? preferredSecondId, string? preferredThirdId)
     {
         yield return preferredSourceId;
         yield return preferredFirstId;
         yield return preferredSecondId;
+        yield return preferredThirdId;
         yield return settings.SourceDeviceId;
         yield return settings.FirstTargetDeviceId;
         yield return settings.SecondTargetDeviceId;
+        yield return settings.ThirdTargetDeviceId;
     }
 
-    private void ApplySettingsToControls(string? preferredSourceId = null, string? preferredFirstId = null, string? preferredSecondId = null)
+    private void ApplySettingsToControls(string? preferredSourceId = null, string? preferredFirstId = null, string? preferredSecondId = null, string? preferredThirdId = null)
     {
         SelectDevice(sourceBox, preferredSourceId, settings.SourceDeviceId, settings.SourceDeviceName, settings.SourceIndex);
         SelectDevice(firstTargetBox, preferredFirstId, settings.FirstTargetDeviceId, settings.FirstTargetDeviceName, settings.FirstTargetIndex);
         SelectDevice(secondTargetBox, preferredSecondId, settings.SecondTargetDeviceId, settings.SecondTargetDeviceName, settings.SecondTargetIndex);
+        SelectDevice(thirdTargetBox, preferredThirdId, settings.ThirdTargetDeviceId, settings.ThirdTargetDeviceName, settings.ThirdTargetIndex);
         firstGainBox.Value = ClampDecimal((decimal)settings.FirstGain, firstGainBox.Minimum, firstGainBox.Maximum);
         secondGainBox.Value = ClampDecimal((decimal)settings.SecondGain, secondGainBox.Minimum, secondGainBox.Maximum);
+        thirdGainBox.Value = ClampDecimal((decimal)settings.ThirdGain, thirdGainBox.Minimum, thirdGainBox.Maximum);
         firstDelayBox.Value = ClampDecimal(settings.FirstDelayMs, firstDelayBox.Minimum, firstDelayBox.Maximum);
         secondDelayBox.Value = ClampDecimal(settings.SecondDelayMs, secondDelayBox.Minimum, secondDelayBox.Maximum);
+        thirdDelayBox.Value = ClampDecimal(settings.ThirdDelayMs, thirdDelayBox.Minimum, thirdDelayBox.Maximum);
+        thirdTargetEnabledBox.Checked = settings.ThirdTargetEnabled;
         splitLeftRightBox.Checked = settings.SplitLeftRight;
         autoRestartBox.Checked = settings.AutoRestart;
         menuSplitItem.Checked = settings.SplitLeftRight;
+        UpdateThirdTargetState();
         UpdateCommandState();
     }
 
@@ -583,18 +610,36 @@ internal sealed class MainForm : Form
         return box.SelectedItem is AudioDeviceInfo device ? device.Id : null;
     }
 
-    private static bool DistinctDeviceIds(string? first, string? second, string? third)
+    private static bool DistinctDeviceIds(params string?[] ids)
     {
-        if (string.IsNullOrWhiteSpace(first) ||
-            string.IsNullOrWhiteSpace(second) ||
-            string.IsNullOrWhiteSpace(third))
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in ids)
         {
-            return false;
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                continue;
+            }
+
+            if (!seen.Add(id))
+            {
+                return false;
+            }
         }
 
-        return !string.Equals(first, second, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(first, third, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(second, third, StringComparison.OrdinalIgnoreCase);
+        return seen.Count >= 3;
+    }
+
+    private void UpdateThirdTargetState()
+    {
+        var enabled = thirdTargetEnabledBox.Checked;
+        thirdTargetBox.Enabled = enabled && engine is null;
+        thirdGainBox.Enabled = enabled;
+        thirdDelayBox.Enabled = enabled;
+        thirdMeter.Enabled = enabled;
+        if (!enabled)
+        {
+            thirdMeter.Level = 0;
+        }
     }
 
     private void StartMirror()
@@ -605,18 +650,26 @@ internal sealed class MainForm : Form
             var source = SelectedDevice(sourceBox);
             var firstTarget = SelectedDevice(firstTargetBox);
             var secondTarget = SelectedDevice(secondTargetBox);
+            var thirdTarget = thirdTargetEnabledBox.Checked ? SelectedDevice(thirdTargetBox) : null;
             EnsureActive(source, AppText.T("Source"));
             EnsureActive(firstTarget, AppText.T("Target1"));
             EnsureActive(secondTarget, AppText.T("Target2"));
+            if (thirdTarget is not null)
+            {
+                EnsureActive(thirdTarget, AppText.T("Target3"));
+            }
             settings = ReadSettingsFromControls();
             engine = new WasapiMirrorEngine(
                 source,
                 firstTarget,
                 secondTarget,
+                thirdTarget,
                 (double)firstGainBox.Value,
                 (double)secondGainBox.Value,
+                (double)thirdGainBox.Value,
                 (int)firstDelayBox.Value,
                 (int)secondDelayBox.Value,
+                (int)thirdDelayBox.Value,
                 splitLeftRightBox.Checked);
 
             startButton.Enabled = false;
@@ -654,8 +707,10 @@ internal sealed class MainForm : Form
         engine?.UpdateSettings(
             (double)firstGainBox.Value,
             (double)secondGainBox.Value,
+            (double)thirdGainBox.Value,
             (int)firstDelayBox.Value,
             (int)secondDelayBox.Value,
+            (int)thirdDelayBox.Value,
             splitLeftRightBox.Checked);
     }
 
@@ -674,16 +729,22 @@ internal sealed class MainForm : Form
             SourceIndex = SelectedDevice(sourceBox).Index,
             FirstTargetIndex = SelectedDevice(firstTargetBox).Index,
             SecondTargetIndex = SelectedDevice(secondTargetBox).Index,
+            ThirdTargetIndex = SelectedDevice(thirdTargetBox).Index,
             SourceDeviceId = SelectedDevice(sourceBox).Id,
             FirstTargetDeviceId = SelectedDevice(firstTargetBox).Id,
             SecondTargetDeviceId = SelectedDevice(secondTargetBox).Id,
+            ThirdTargetDeviceId = SelectedDevice(thirdTargetBox).Id,
             SourceDeviceName = SelectedDevice(sourceBox).Name,
             FirstTargetDeviceName = SelectedDevice(firstTargetBox).Name,
             SecondTargetDeviceName = SelectedDevice(secondTargetBox).Name,
+            ThirdTargetDeviceName = SelectedDevice(thirdTargetBox).Name,
             FirstGain = (double)firstGainBox.Value,
             SecondGain = (double)secondGainBox.Value,
+            ThirdGain = (double)thirdGainBox.Value,
             FirstDelayMs = (int)firstDelayBox.Value,
             SecondDelayMs = (int)secondDelayBox.Value,
+            ThirdDelayMs = (int)thirdDelayBox.Value,
+            ThirdTargetEnabled = thirdTargetEnabledBox.Checked,
             SplitLeftRight = splitLeftRightBox.Checked,
             AutoRestart = autoRestartBox.Checked,
             LanguageCode = settings.LanguageCode
@@ -718,10 +779,14 @@ internal sealed class MainForm : Form
         }
 
         var error = engine.LastError is null ? "" : $"{Environment.NewLine}{AppText.F("ErrorLine", engine.LastError.Message)}";
+        var thirdStats = engine.ThirdTargetName is null
+            ? ""
+            : $", T3 written {engine.ThirdWrittenFrames}, dropped {engine.ThirdDroppedFrames}";
         statusLabel.Text =
-            AppText.F("RunningLine", engine.SourceName, engine.FirstTargetName, engine.SecondTargetName) + Environment.NewLine +
+            AppText.F("RunningTargetsLine", engine.SourceName, engine.TargetNames) + Environment.NewLine +
             AppText.F("FormatLine", engine.Format.SampleRate, engine.Format.Channels, engine.Format.Bits, splitLeftRightBox.Checked ? AppText.T("ModeSplit") : AppText.T("ModeStereo")) + Environment.NewLine +
             AppText.F("PacketsLine", engine.Packets, engine.CapturedFrames, engine.FirstWrittenFrames, engine.FirstDroppedFrames, engine.SecondWrittenFrames, engine.SecondDroppedFrames) +
+            thirdStats +
             error;
         UpdateMeters();
     }
@@ -733,12 +798,14 @@ internal sealed class MainForm : Form
             sourceMeter.Level = 0;
             firstMeter.Level = 0;
             secondMeter.Level = 0;
+            thirdMeter.Level = 0;
             return;
         }
 
         sourceMeter.Level = engine.SourceLevel;
         firstMeter.Level = engine.FirstLevel;
         secondMeter.Level = engine.SecondLevel;
+        thirdMeter.Level = engine.ThirdLevel;
     }
 
     private void RegisterStartup()
@@ -767,6 +834,8 @@ internal sealed class MainForm : Form
         menuStopItem.Enabled = running;
         trayStartItem.Enabled = !running;
         trayStopItem.Enabled = running;
+        thirdTargetBox.Enabled = thirdTargetEnabledBox.Checked && !running;
+        thirdTargetEnabledBox.Enabled = !running;
         notifyIcon.Text = running ? AppText.T("NotifyRunning") : AppText.T("NotifyStopped");
     }
 
@@ -785,7 +854,7 @@ internal sealed class MainForm : Form
         }
 
         var captured = engine.CapturedFrames;
-        var written = engine.FirstWrittenFrames + engine.SecondWrittenFrames;
+        var written = engine.FirstWrittenFrames + engine.SecondWrittenFrames + engine.ThirdWrittenFrames;
         var moved = captured != lastWatchdogCapturedFrames || written != lastWatchdogWrittenFrames;
         lastWatchdogCapturedFrames = captured;
         lastWatchdogWrittenFrames = written;
@@ -806,7 +875,7 @@ internal sealed class MainForm : Form
     private void ResetWatchdog()
     {
         lastWatchdogCapturedFrames = engine?.CapturedFrames ?? 0;
-        lastWatchdogWrittenFrames = engine is null ? 0 : engine.FirstWrittenFrames + engine.SecondWrittenFrames;
+        lastWatchdogWrittenFrames = engine is null ? 0 : engine.FirstWrittenFrames + engine.SecondWrittenFrames + engine.ThirdWrittenFrames;
         stalledWatchdogTicks = 0;
     }
 
@@ -895,17 +964,18 @@ internal sealed class MainForm : Form
     {
         if (sourceBox.SelectedItem is not AudioDeviceInfo source ||
             firstTargetBox.SelectedItem is not AudioDeviceInfo firstTarget ||
-            secondTargetBox.SelectedItem is not AudioDeviceInfo secondTarget)
+            secondTargetBox.SelectedItem is not AudioDeviceInfo secondTarget ||
+            thirdTargetEnabledBox.Checked && thirdTargetBox.SelectedItem is not AudioDeviceInfo)
         {
             return false;
         }
 
+        var thirdTarget = thirdTargetEnabledBox.Checked ? (AudioDeviceInfo?)thirdTargetBox.SelectedItem : null;
         return source.IsActive &&
             firstTarget.IsActive &&
             secondTarget.IsActive &&
-            !string.Equals(source.Id, firstTarget.Id, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(source.Id, secondTarget.Id, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(firstTarget.Id, secondTarget.Id, StringComparison.OrdinalIgnoreCase);
+            (thirdTarget?.IsActive ?? true) &&
+            DistinctDeviceIds(source.Id, firstTarget.Id, secondTarget.Id, thirdTarget?.Id);
     }
 
     private async void RestartMirror(string reasonKey)
@@ -951,18 +1021,21 @@ internal sealed class MainForm : Form
         {
             if (sourceBox.SelectedItem is not AudioDeviceInfo source ||
                 firstTargetBox.SelectedItem is not AudioDeviceInfo firstTarget ||
-                secondTargetBox.SelectedItem is not AudioDeviceInfo secondTarget)
+                secondTargetBox.SelectedItem is not AudioDeviceInfo secondTarget ||
+                thirdTargetEnabledBox.Checked && thirdTargetBox.SelectedItem is not AudioDeviceInfo)
             {
                 formatLabel.Text = AppText.T("SelectDevices");
                 formatLabel.BackColor = SystemColors.Control;
                 return;
             }
 
-            if (!source.IsActive || !firstTarget.IsActive || !secondTarget.IsActive)
+            var thirdTarget = thirdTargetEnabledBox.Checked ? (AudioDeviceInfo?)thirdTargetBox.SelectedItem : null;
+            if (!source.IsActive || !firstTarget.IsActive || !secondTarget.IsActive || thirdTarget is { IsActive: false })
             {
                 SetFormatMeter(sourceMeter, source.IsActive, AppText.F("FormatTooltip", AppText.T("Source"), DeviceStateText(source)));
                 SetFormatMeter(firstMeter, firstTarget.IsActive, AppText.F("FormatTooltip", AppText.T("Target1"), DeviceStateText(firstTarget)));
                 SetFormatMeter(secondMeter, secondTarget.IsActive, AppText.F("FormatTooltip", AppText.T("Target2"), DeviceStateText(secondTarget)));
+                SetFormatMeter(thirdMeter, thirdTarget?.IsActive ?? true, AppText.F("FormatTooltip", AppText.T("Target3"), thirdTarget is null ? AppText.T("Stopped") : DeviceStateText(thirdTarget)));
                 formatLabel.Text = AppText.T("NotActiveSelected");
                 formatLabel.BackColor = SystemColors.Control;
                 formatLabel.ForeColor = Color.FromArgb(160, 95, 0);
@@ -972,13 +1045,15 @@ internal sealed class MainForm : Form
             var sourceFormat = CoreAudio.GetMixFormat(source.Device);
             var firstFormat = CoreAudio.GetMixFormat(firstTarget.Device);
             var secondFormat = CoreAudio.GetMixFormat(secondTarget.Device);
-            var targetsMatch = firstFormat.Matches(secondFormat);
-            var allMatch = sourceFormat.Matches(firstFormat) && sourceFormat.Matches(secondFormat);
-            var sourceMatchesTargets = sourceFormat.Matches(firstFormat) || sourceFormat.Matches(secondFormat);
+            var thirdFormat = thirdTarget is null ? null : CoreAudio.GetMixFormat(thirdTarget.Device);
+            var targetsMatch = firstFormat.Matches(secondFormat) && (thirdFormat is null || firstFormat.Matches(thirdFormat));
+            var allMatch = sourceFormat.Matches(firstFormat) && sourceFormat.Matches(secondFormat) && (thirdFormat is null || sourceFormat.Matches(thirdFormat));
+            var sourceMatchesTargets = sourceFormat.Matches(firstFormat) || sourceFormat.Matches(secondFormat) || (thirdFormat is not null && sourceFormat.Matches(thirdFormat));
 
             SetFormatMeter(sourceMeter, sourceMatchesTargets || allMatch, AppText.F("FormatTooltip", AppText.T("Source"), sourceFormat.DisplayName));
             SetFormatMeter(firstMeter, firstFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target1"), firstFormat.DisplayName));
             SetFormatMeter(secondMeter, secondFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target2"), secondFormat.DisplayName));
+            SetFormatMeter(thirdMeter, thirdFormat is null || thirdFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target3"), thirdFormat?.DisplayName ?? AppText.T("Stopped")));
 
             formatLabel.Text =
                 (allMatch
@@ -995,6 +1070,7 @@ internal sealed class MainForm : Form
             SetFormatMeter(sourceMeter, false, AppText.T("CouldNotReadFormatShort"));
             SetFormatMeter(firstMeter, false, AppText.T("CouldNotReadFormatShort"));
             SetFormatMeter(secondMeter, false, AppText.T("CouldNotReadFormatShort"));
+            SetFormatMeter(thirdMeter, false, AppText.T("CouldNotReadFormatShort"));
             formatLabel.Text = AppText.F("CouldNotReadFormat", ex.Message);
             formatLabel.BackColor = SystemColors.Control;
             formatLabel.ForeColor = Color.FromArgb(170, 40, 40);
@@ -1048,7 +1124,10 @@ internal sealed class MainForm : Form
     {
         try
         {
-            using var form = new TestForm(SelectedDevice(firstTargetBox), SelectedDevice(secondTargetBox));
+            using var form = new TestForm(
+                SelectedDevice(firstTargetBox),
+                SelectedDevice(secondTargetBox),
+                thirdTargetEnabledBox.Checked ? SelectedDevice(thirdTargetBox) : null);
             if (Visible)
             {
                 form.ShowDialog(this);

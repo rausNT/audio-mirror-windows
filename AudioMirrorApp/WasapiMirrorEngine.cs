@@ -316,19 +316,29 @@ internal sealed class WasapiMirrorEngine : IDisposable
     private readonly CoreAudio.IAudioCaptureClient captureClient;
     private readonly RenderSink firstSink;
     private readonly RenderSink secondSink;
+    private readonly RenderSink? thirdSink;
     private readonly IntPtr format;
 
     public WasapiMirrorEngine(
         AudioDeviceInfo source,
         AudioDeviceInfo firstTarget,
         AudioDeviceInfo secondTarget,
+        AudioDeviceInfo? thirdTarget,
         double firstGain,
         double secondGain,
+        double thirdGain,
         int firstDelayMs,
         int secondDelayMs,
+        int thirdDelayMs,
         bool splitLeftRight)
     {
-        if (source.Id == firstTarget.Id || source.Id == secondTarget.Id || firstTarget.Id == secondTarget.Id)
+        if (source.Id == firstTarget.Id ||
+            source.Id == secondTarget.Id ||
+            firstTarget.Id == secondTarget.Id ||
+            thirdTarget is not null && (
+                source.Id == thirdTarget.Id ||
+                firstTarget.Id == thirdTarget.Id ||
+                secondTarget.Id == thirdTarget.Id))
         {
             throw new InvalidOperationException("Source and targets must be different devices.");
         }
@@ -336,6 +346,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         SourceName = source.Name;
         FirstTargetName = firstTarget.Name;
         SecondTargetName = secondTarget.Name;
+        ThirdTargetName = thirdTarget?.Name;
 
         captureAudioClient = CoreAudio.ActivateAudioClient(source.Device);
         captureAudioClient.GetMixFormat(out format);
@@ -381,12 +392,31 @@ internal sealed class WasapiMirrorEngine : IDisposable
             secondDelayMs,
             splitLeftRight ? ChannelMode.RightToMono : ChannelMode.Stereo);
 
+        if (thirdTarget is not null)
+        {
+            thirdSink = new RenderSink(
+                thirdTarget,
+                format,
+                bufferDuration,
+                Format.BlockAlign,
+                Format.SampleRate,
+                Format.Channels,
+                Format.Bits,
+                Format.ValidBits,
+                Format.FormatTag,
+                Format.SubFormat,
+                thirdGain,
+                thirdDelayMs,
+                ChannelMode.Stereo);
+        }
+
         var captureServiceId = CoreAudio.IAudioCaptureClientId;
         captureAudioClient.GetService(ref captureServiceId, out var service);
         captureClient = (CoreAudio.IAudioCaptureClient)service;
 
         firstSink.Start();
         secondSink.Start();
+        thirdSink?.Start();
         captureAudioClient.Start();
 
         worker = Task.Run(CaptureLoop);
@@ -395,6 +425,10 @@ internal sealed class WasapiMirrorEngine : IDisposable
     public string SourceName { get; }
     public string FirstTargetName { get; }
     public string SecondTargetName { get; }
+    public string? ThirdTargetName { get; }
+    public string TargetNames => ThirdTargetName is null
+        ? $"{FirstTargetName}, {SecondTargetName}"
+        : $"{FirstTargetName}, {SecondTargetName}, {ThirdTargetName}";
     public AudioFormatInfo Format { get; }
     public long Packets { get; private set; }
     public long CapturedFrames { get; private set; }
@@ -402,15 +436,26 @@ internal sealed class WasapiMirrorEngine : IDisposable
     public long FirstDroppedFrames => firstSink.DroppedFrames;
     public long SecondWrittenFrames => secondSink.WrittenFrames;
     public long SecondDroppedFrames => secondSink.DroppedFrames;
+    public long ThirdWrittenFrames => thirdSink?.WrittenFrames ?? 0;
+    public long ThirdDroppedFrames => thirdSink?.DroppedFrames ?? 0;
     public float SourceLevel { get; private set; }
     public float FirstLevel => firstSink.Level;
     public float SecondLevel => secondSink.Level;
+    public float ThirdLevel => thirdSink?.Level ?? 0;
     public Exception? LastError { get; private set; }
 
-    public void UpdateSettings(double firstGain, double secondGain, int firstDelayMs, int secondDelayMs, bool splitLeftRight)
+    public void UpdateSettings(
+        double firstGain,
+        double secondGain,
+        double thirdGain,
+        int firstDelayMs,
+        int secondDelayMs,
+        int thirdDelayMs,
+        bool splitLeftRight)
     {
         firstSink.SetSettings(firstGain, firstDelayMs, splitLeftRight ? ChannelMode.LeftToMono : ChannelMode.Stereo);
         secondSink.SetSettings(secondGain, secondDelayMs, splitLeftRight ? ChannelMode.RightToMono : ChannelMode.Stereo);
+        thirdSink?.SetSettings(thirdGain, thirdDelayMs, ChannelMode.Stereo);
     }
 
     public void Dispose()
@@ -435,6 +480,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
 
         firstSink.Stop();
         secondSink.Stop();
+        thirdSink?.Stop();
         if (format != IntPtr.Zero)
         {
             CoreAudio.CoTaskMemFree(format);
@@ -466,6 +512,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
                         : SmoothLevel(SourceLevel, CalculatePeak(sourceBuffer, (int)(frames * Format.BlockAlign), Format.Bits, Format.ValidBits, Format.FormatTag, Format.SubFormat));
                     firstSink.Write(sourceBuffer, frames, flags);
                     secondSink.Write(sourceBuffer, frames, flags);
+                    thirdSink?.Write(sourceBuffer, frames, flags);
                     captureClient.ReleaseBuffer(frames);
                     captureClient.GetNextPacketSize(out packetFrames);
                 }
@@ -473,6 +520,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
                 SourceLevel *= 0.96f;
                 firstSink.DecayLevel();
                 secondSink.DecayLevel();
+                thirdSink?.DecayLevel();
             }
         }
         catch (Exception ex)
