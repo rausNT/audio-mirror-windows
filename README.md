@@ -24,6 +24,8 @@ controls so the outputs can be aligned by ear.
 Download the latest Windows build from the repository Releases page, unzip it,
 and run `AudioMirrorApp.exe`.
 
+The running app shows its version in the main window title and in Help -> About.
+
 There are two release packages:
 
 - `AudioMirrorSetup-win-x64.zip`: user-level installer. It installs AudioMirror

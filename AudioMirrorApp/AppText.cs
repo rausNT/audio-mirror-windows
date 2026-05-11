@@ -7,6 +7,7 @@ internal static class AppText
     private static readonly Dictionary<string, string> English = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Language"] = "Language",
+        ["Version"] = "Version",
         ["File"] = "File",
         ["Actions"] = "Actions",
         ["Help"] = "Help",

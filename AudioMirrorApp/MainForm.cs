@@ -79,7 +79,7 @@ internal sealed class MainForm : Form
     public MainForm(bool startAfterShown)
     {
         this.startAfterShown = startAfterShown;
-        Text = "AudioMirror";
+        Text = $"AudioMirror {AppVersion.Display}";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(760, 420);
@@ -1084,8 +1084,8 @@ internal sealed class MainForm : Form
     {
         using var form = new InfoForm(
             AppText.T("AboutTitle"),
-            AppText.T("AboutHeading"),
-            AppText.T("AboutBody"));
+            $"{AppText.T("AboutHeading")} {AppVersion.Display}",
+            $"{AppText.T("Version")}: {AppVersion.Display}{Environment.NewLine}{Environment.NewLine}{AppText.T("AboutBody")}");
         if (Visible)
         {
             form.ShowDialog(this);
