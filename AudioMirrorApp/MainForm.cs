@@ -4,6 +4,7 @@ using System.Diagnostics;
 
 internal sealed class MainForm : Form
 {
+    private const int DeviceRefreshRetryTicks = 45;
     private readonly ComboBox sourceBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox firstTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox secondTargetBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -642,7 +643,7 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void StartMirror()
+    private bool StartMirror(bool showErrors = true)
     {
         try
         {
@@ -680,11 +681,21 @@ internal sealed class MainForm : Form
             ResetWatchdog();
             UpdateStatus();
             UpdateCommandState();
+            return true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, AppText.T("StartFailed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             StopMirror();
+            if (showErrors)
+            {
+                MessageBox.Show(this, ex.Message, AppText.T("StartFailed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            else
+            {
+                statusLabel.Text = ex.Message;
+            }
+
+            return false;
         }
     }
 
@@ -907,7 +918,7 @@ internal sealed class MainForm : Form
     private void ScheduleDeviceRefresh(string reasonKey, bool restartWhenReady)
     {
         deviceRefreshReasonKey = reasonKey;
-        pendingDeviceRefreshTicks = 15;
+        pendingDeviceRefreshTicks = DeviceRefreshRetryTicks;
         restartAfterDeviceRefresh |= restartWhenReady;
         deviceRefreshTimer.Stop();
         deviceRefreshTimer.Start();
@@ -949,7 +960,12 @@ internal sealed class MainForm : Form
                 StopMirror();
             }
 
-            StartMirror();
+            if (!StartMirror(showErrors: false))
+            {
+                statusLabel.Text = AppText.F("WaitingSelectedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
+                return;
+            }
+
             restartAfterDeviceRefresh = false;
             deviceRefreshTimer.Stop();
             statusLabel.Text = AppText.F("RestartedAfter", AppText.T(deviceRefreshReasonKey));
@@ -998,8 +1014,14 @@ internal sealed class MainForm : Form
             await Task.Delay(1200);
 
             RefreshDevices();
-            StartMirror();
-            statusLabel.Text = AppText.F("Restarted", AppText.T(reasonKey));
+            if (StartMirror(showErrors: false))
+            {
+                statusLabel.Text = AppText.F("Restarted", AppText.T(reasonKey));
+            }
+            else
+            {
+                ScheduleDeviceRefresh(reasonKey, restartWhenReady: true);
+            }
         }
         catch (Exception ex)
         {
