@@ -98,6 +98,7 @@ internal static class AppText
         ["SyncApplied"] = "App sync applied: both targets use the source stream format internally. Change Windows device formats manually if the format lights are still amber.",
         ["SelectAllDevices"] = "Select all devices first.",
         ["NotifyRunning"] = "AudioMirror - running",
+        ["NotifyWaiting"] = "AudioMirror - waiting for devices",
         ["NotifyStopped"] = "AudioMirror - stopped"
     };
 

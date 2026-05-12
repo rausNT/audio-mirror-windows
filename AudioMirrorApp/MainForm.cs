@@ -73,6 +73,7 @@ internal sealed class MainForm : Form
     private readonly bool startAfterShown;
     private bool allowExit;
     private bool restarting;
+    private bool desiredMirroring;
     private bool restartAfterDeviceRefresh;
     private int pendingDeviceRefreshTicks;
     private string deviceRefreshReasonKey = "DeviceChange";
@@ -103,7 +104,11 @@ internal sealed class MainForm : Form
         {
             if (this.startAfterShown)
             {
-                StartMirror();
+                desiredMirroring = true;
+                if (!StartMirror(showErrors: false))
+                {
+                    ScheduleDeviceRefresh("SystemResume", restartWhenReady: true);
+                }
             }
         };
     }
@@ -132,7 +137,7 @@ internal sealed class MainForm : Form
 
         if (m.Msg == wmDeviceChange)
         {
-            ScheduleDeviceRefresh("DeviceChange", engine is not null);
+            ScheduleDeviceRefresh("DeviceChange", engine is not null || desiredMirroring);
         }
     }
 
@@ -645,9 +650,14 @@ internal sealed class MainForm : Form
 
     private bool StartMirror(bool showErrors = true)
     {
+        if (showErrors)
+        {
+            desiredMirroring = true;
+        }
+
         try
         {
-            StopMirror();
+            StopMirror(userRequested: false);
             var source = SelectedDevice(sourceBox);
             var firstTarget = SelectedDevice(firstTargetBox);
             var secondTarget = SelectedDevice(secondTargetBox);
@@ -681,13 +691,15 @@ internal sealed class MainForm : Form
             ResetWatchdog();
             UpdateStatus();
             UpdateCommandState();
+            desiredMirroring = true;
             return true;
         }
         catch (Exception ex)
         {
-            StopMirror();
+            StopMirror(userRequested: false);
             if (showErrors)
             {
+                desiredMirroring = false;
                 MessageBox.Show(this, ex.Message, AppText.T("StartFailed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             else
@@ -699,8 +711,15 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void StopMirror()
+    private void StopMirror(bool userRequested = true)
     {
+        if (userRequested)
+        {
+            desiredMirroring = false;
+            restartAfterDeviceRefresh = false;
+            deviceRefreshTimer.Stop();
+        }
+
         statsTimer.Stop();
         meterTimer.Stop();
         watchdogTimer.Stop();
@@ -839,15 +858,20 @@ internal sealed class MainForm : Form
     private void UpdateCommandState()
     {
         var running = engine is not null;
-        startButton.Enabled = !running;
-        stopButton.Enabled = running;
-        menuStartItem.Enabled = !running;
-        menuStopItem.Enabled = running;
-        trayStartItem.Enabled = !running;
-        trayStopItem.Enabled = running;
+        var waiting = desiredMirroring && !running && deviceRefreshTimer.Enabled;
+        startButton.Enabled = !running && !waiting;
+        stopButton.Enabled = running || waiting;
+        menuStartItem.Enabled = !running && !waiting;
+        menuStopItem.Enabled = running || waiting;
+        trayStartItem.Enabled = !running && !waiting;
+        trayStopItem.Enabled = running || waiting;
         thirdTargetBox.Enabled = thirdTargetEnabledBox.Checked && !running;
         thirdTargetEnabledBox.Enabled = !running;
-        notifyIcon.Text = running ? AppText.T("NotifyRunning") : AppText.T("NotifyStopped");
+        notifyIcon.Text = running
+            ? AppText.T("NotifyRunning")
+            : waiting
+                ? AppText.T("NotifyWaiting")
+                : AppText.T("NotifyStopped");
     }
 
     private void WatchdogTick()
@@ -894,10 +918,11 @@ internal sealed class MainForm : Form
     {
         if (e.Mode == Microsoft.Win32.PowerModes.Suspend)
         {
-            if (engine is not null)
+            if (engine is not null || desiredMirroring)
             {
+                desiredMirroring = true;
                 restartAfterDeviceRefresh = true;
-                StopMirror();
+                StopMirror(userRequested: false);
                 statusLabel.Text = AppText.T("PausedSleep");
             }
 
@@ -906,35 +931,46 @@ internal sealed class MainForm : Form
 
         if (e.Mode == Microsoft.Win32.PowerModes.Resume)
         {
-            ScheduleDeviceRefresh("SystemResume", restartAfterDeviceRefresh || engine is not null);
+            ScheduleDeviceRefresh("SystemResume", restartAfterDeviceRefresh || engine is not null || desiredMirroring);
         }
     }
 
     private void SystemEventsDisplaySettingsChanged(object? sender, EventArgs e)
     {
-        ScheduleDeviceRefresh("DisplayChange", engine is not null);
+        ScheduleDeviceRefresh("DisplayChange", engine is not null || desiredMirroring);
     }
 
     private void ScheduleDeviceRefresh(string reasonKey, bool restartWhenReady)
     {
         deviceRefreshReasonKey = reasonKey;
         pendingDeviceRefreshTicks = DeviceRefreshRetryTicks;
-        restartAfterDeviceRefresh |= restartWhenReady;
+        restartAfterDeviceRefresh |= restartWhenReady || desiredMirroring;
         deviceRefreshTimer.Stop();
         deviceRefreshTimer.Start();
 
-        if (restartWhenReady)
+        if (restartWhenReady || desiredMirroring)
         {
             statusLabel.Text = AppText.F("WaitingDevices", AppText.T(reasonKey));
         }
+
+        UpdateCommandState();
     }
 
     private void DeviceRefreshTick()
     {
         if (pendingDeviceRefreshTicks <= 0)
         {
+            if (desiredMirroring && engine is null)
+            {
+                pendingDeviceRefreshTicks = DeviceRefreshRetryTicks;
+                restartAfterDeviceRefresh = true;
+                statusLabel.Text = AppText.F("WaitingSelectedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
+                return;
+            }
+
             deviceRefreshTimer.Stop();
             restartAfterDeviceRefresh = false;
+            UpdateCommandState();
             return;
         }
 
@@ -957,7 +993,7 @@ internal sealed class MainForm : Form
 
             if (engine is not null)
             {
-                StopMirror();
+                StopMirror(userRequested: false);
             }
 
             if (!StartMirror(showErrors: false))
@@ -969,6 +1005,7 @@ internal sealed class MainForm : Form
             restartAfterDeviceRefresh = false;
             deviceRefreshTimer.Stop();
             statusLabel.Text = AppText.F("RestartedAfter", AppText.T(deviceRefreshReasonKey));
+            UpdateCommandState();
         }
         catch (Exception ex)
         {
@@ -1002,6 +1039,7 @@ internal sealed class MainForm : Form
         }
 
         restarting = true;
+        desiredMirroring = true;
         statusLabel.Text = AppText.F("Restarting", AppText.T(reasonKey));
         try
         {

@@ -8,11 +8,11 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.11";
+    private const string DisplayVersion = "0.9.12";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
-        "- The installer now shows the installed and new version before replacing files.\n" +
+        "- AudioMirror now keeps retrying after display sleep until the selected audio devices wake up.\n" +
         "- If AudioMirror is running, audio from AudioMirror will briefly stop during the update.\n" +
         "- After the update, AudioMirror will be started again with mirroring enabled so sound can continue.";
 
