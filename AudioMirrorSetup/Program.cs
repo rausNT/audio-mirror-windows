@@ -8,8 +8,13 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.1";
+    private const string DisplayVersion = "0.9.11";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
+    private const string ReleaseSummary =
+        "Changes in this update:\n" +
+        "- The installer now shows the installed and new version before replacing files.\n" +
+        "- If AudioMirror is running, audio from AudioMirror will briefly stop during the update.\n" +
+        "- After the update, AudioMirror will be started again with mirroring enabled so sound can continue.";
 
     [STAThread]
     private static void Main()
@@ -18,37 +23,48 @@ internal static class Program
 
         try
         {
+            var installDir = GetInstallDir();
+            var installedVersion = GetInstalledVersion(installDir);
+            var runningBeforeInstall = IsAudioMirrorRunning(installDir);
+
             var result = MessageBox.Show(
-                "Install AudioMirror for the current user?",
+                BuildInstallPrompt(installedVersion, runningBeforeInstall),
                 "AudioMirror Setup",
                 MessageBoxButtons.OKCancel,
-                MessageBoxIcon.Question);
+                MessageBoxIcon.Information);
 
             if (result != DialogResult.OK)
             {
                 return;
             }
 
-            var installDir = GetInstallDir();
-            StopRunningAudioMirror(installDir);
+            var stoppedRunningApp = StopRunningAudioMirror(installDir);
             Directory.CreateDirectory(installDir);
             ExtractPayload(installDir);
             WriteUninstaller(installDir);
             CreateStartMenuShortcut(installDir);
             RegisterUninstallEntry(installDir);
 
+            if (runningBeforeInstall || stoppedRunningApp)
+            {
+                LaunchAudioMirror(installDir, "--start");
+                MessageBox.Show(
+                    $"AudioMirror {DisplayVersion} was installed successfully.\n\nAudioMirror was restarted with mirroring enabled.",
+                    "AudioMirror Setup",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
             var launch = MessageBox.Show(
-                "AudioMirror was installed successfully.\n\nLaunch it now?",
+                $"AudioMirror {DisplayVersion} was installed successfully.\n\nLaunch it now?",
                 "AudioMirror Setup",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Information);
 
             if (launch == DialogResult.Yes)
             {
-                Process.Start(new ProcessStartInfo(Path.Combine(installDir, "AudioMirrorApp.exe"))
-                {
-                    UseShellExecute = true
-                });
+                LaunchAudioMirror(installDir, "");
             }
         }
         catch (Exception ex)
@@ -67,8 +83,62 @@ internal static class Program
         return Path.Combine(localAppData, "Programs", "AudioMirror");
     }
 
-    private static void StopRunningAudioMirror(string installDir)
+    private static string BuildInstallPrompt(string? installedVersion, bool runningBeforeInstall)
     {
+        var versionLine = string.IsNullOrWhiteSpace(installedVersion)
+            ? $"Install AudioMirror {DisplayVersion} for the current user?"
+            : $"AudioMirror {DisplayVersion} will replace AudioMirror {installedVersion}.";
+        var runningLine = runningBeforeInstall
+            ? "\n\nAudioMirror is currently running. Sound produced through AudioMirror will briefly stop during installation."
+            : "";
+
+        return $"{versionLine}\n\n{ReleaseSummary}{runningLine}\n\nContinue?";
+    }
+
+    private static string? GetInstalledVersion(string installDir)
+    {
+        var exePath = Path.Combine(installDir, "AudioMirrorApp.exe");
+        if (File.Exists(exePath))
+        {
+            var versionInfo = FileVersionInfo.GetVersionInfo(exePath);
+            if (!string.IsNullOrWhiteSpace(versionInfo.ProductVersion))
+            {
+                return versionInfo.ProductVersion;
+            }
+
+            if (!string.IsNullOrWhiteSpace(versionInfo.FileVersion))
+            {
+                return versionInfo.FileVersion;
+            }
+        }
+
+        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\AudioMirror");
+        return key?.GetValue("DisplayVersion") as string;
+    }
+
+    private static bool IsAudioMirrorRunning(string installDir)
+    {
+        return Process.GetProcessesByName("AudioMirrorApp").Any(process =>
+        {
+            using (process)
+            {
+                try
+                {
+                    var processPath = process.MainModule?.FileName ?? string.Empty;
+                    return string.IsNullOrEmpty(processPath) ||
+                        processPath.StartsWith(installDir, StringComparison.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    return true;
+                }
+            }
+        });
+    }
+
+    private static bool StopRunningAudioMirror(string installDir)
+    {
+        var stoppedAny = false;
         var processes = Process.GetProcessesByName("AudioMirrorApp");
         foreach (var process in processes)
         {
@@ -83,6 +153,7 @@ internal static class Program
                         continue;
                     }
 
+                    stoppedAny = true;
                     process.CloseMainWindow();
                     if (!process.WaitForExit(2500))
                     {
@@ -94,6 +165,7 @@ internal static class Program
                 {
                     try
                     {
+                        stoppedAny = true;
                         process.Kill(entireProcessTree: true);
                         process.WaitForExit(5000);
                     }
@@ -106,6 +178,16 @@ internal static class Program
 
         WaitForFileRelease(Path.Combine(installDir, "AudioMirrorApp.dll"));
         WaitForFileRelease(Path.Combine(installDir, "AudioMirrorApp.exe"));
+        return stoppedAny;
+    }
+
+    private static void LaunchAudioMirror(string installDir, string arguments)
+    {
+        Process.Start(new ProcessStartInfo(Path.Combine(installDir, "AudioMirrorApp.exe"))
+        {
+            Arguments = arguments,
+            UseShellExecute = true
+        });
     }
 
     private static void WaitForFileRelease(string path)
