@@ -857,7 +857,7 @@ internal sealed class MainForm : Form
     {
         if (engine is null)
         {
-            statusLabel.Text = AppText.T("Stopped");
+            statusLabel.Text = AppText.T("StatusStopped");
             UpdateMeters();
             return;
         }
@@ -866,13 +866,23 @@ internal sealed class MainForm : Form
         var thirdStats = engine.ThirdTargetName is null
             ? ""
             : $", T3 written {engine.ThirdWrittenFrames}, dropped {engine.ThirdDroppedFrames}";
+        var hasDroppedFrames = engine.FirstDroppedFrames > 0 ||
+            engine.SecondDroppedFrames > 0 ||
+            engine.ThirdDroppedFrames > 0;
+        var noSourceAudio = engine.CapturedFrames == 0;
+        var summary = noSourceAudio
+            ? AppText.T("StatusNoSourceAudio")
+            : hasDroppedFrames
+                ? AppText.T("StatusDroppingFrames")
+                : AppText.T("StatusRunningNormally");
         statusLabel.Text =
+            summary + Environment.NewLine +
             AppText.F("RunningTargetsLine", engine.SourceName, engine.TargetNames) + Environment.NewLine +
             AppText.F("FormatLine", engine.Format.SampleRate, engine.Format.Channels, engine.Format.Bits, splitLeftRightBox.Checked ? AppText.T("ModeSplit") : AppText.T("ModeStereo")) + Environment.NewLine +
             AppText.F("PacketsLine", engine.Packets, engine.CapturedFrames, engine.FirstWrittenFrames, engine.FirstDroppedFrames, engine.SecondWrittenFrames, engine.SecondDroppedFrames) +
             thirdStats +
             error +
-            (engine.CapturedFrames == 0 ? $"{Environment.NewLine}{AppText.T("NoAudioReachingSource")}" : "");
+            (noSourceAudio ? $"{Environment.NewLine}{AppText.T("NoAudioReachingSource")}" : "");
         UpdateMeters();
     }
 
@@ -1005,7 +1015,8 @@ internal sealed class MainForm : Form
 
         if (restartWhenReady || desiredMirroring)
         {
-            statusLabel.Text = AppText.F("WaitingDevices", AppText.T(reasonKey));
+            statusLabel.Text = AppText.T("StatusWaitingDevices") + Environment.NewLine +
+                AppText.F("WaitingDevices", AppText.T(reasonKey));
         }
 
         UpdateCommandState();
@@ -1019,7 +1030,7 @@ internal sealed class MainForm : Form
             {
                 pendingDeviceRefreshTicks = DeviceRefreshRetryTicks;
                 restartAfterDeviceRefresh = true;
-                statusLabel.Text = AppText.F("WaitingSelectedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
+                statusLabel.Text = WaitingSelectedStatus();
                 return;
             }
 
@@ -1042,7 +1053,7 @@ internal sealed class MainForm : Form
 
             if (!SelectedDevicesReady())
             {
-                statusLabel.Text = AppText.F("WaitingSelectedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
+                statusLabel.Text = WaitingSelectedStatus();
                 return;
             }
 
@@ -1053,7 +1064,7 @@ internal sealed class MainForm : Form
 
             if (!StartMirror(showErrors: false))
             {
-                statusLabel.Text = AppText.F("WaitingSelectedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
+                statusLabel.Text = WaitingSelectedStatus();
                 return;
             }
 
@@ -1066,6 +1077,12 @@ internal sealed class MainForm : Form
         {
             statusLabel.Text = AppText.F("DeviceRefreshFailed", AppText.T(deviceRefreshReasonKey), ex.Message);
         }
+    }
+
+    private string WaitingSelectedStatus()
+    {
+        return AppText.T("StatusWaitingDevices") + Environment.NewLine +
+            AppText.F("WaitingSelectedAfter", AppText.T(deviceRefreshReasonKey), devices.Count);
     }
 
     private bool SelectedDevicesReady()
