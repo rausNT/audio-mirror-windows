@@ -8,11 +8,12 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.13";
+    private const string DisplayVersion = "0.9.14";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
-        "- Fixes the setup package so the downloaded installer can run by itself.\n" +
+        "- The setup package and installed app are now self-contained and do not require a separate .NET install.\n" +
+        "- Settings are stored in the user profile instead of beside the app binaries.\n" +
         "- AudioMirror keeps retrying after display sleep until the selected audio devices wake up.\n" +
         "- If AudioMirror is running, audio from AudioMirror will briefly stop during the update.\n" +
         "- After the update, AudioMirror will be started again with mirroring enabled so sound can continue.";
@@ -221,6 +222,11 @@ internal static class Program
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip")
             ?? throw new InvalidOperationException("Installer payload was not found.");
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var installRoot = Path.GetFullPath(installDir);
+        if (!installRoot.EndsWith(Path.DirectorySeparatorChar))
+        {
+            installRoot += Path.DirectorySeparatorChar;
+        }
 
         foreach (var entry in archive.Entries)
         {
@@ -229,7 +235,12 @@ internal static class Program
                 continue;
             }
 
-            var path = Path.Combine(installDir, entry.FullName);
+            var path = Path.GetFullPath(Path.Combine(installDir, entry.FullName));
+            if (!path.StartsWith(installRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Unsafe installer payload path: {entry.FullName}");
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? installDir);
             entry.ExtractToFile(path, overwrite: true);
         }

@@ -125,6 +125,7 @@ internal sealed class MainForm : Form
         notifyIcon.Visible = false;
         notifyIcon.Dispose();
         engine?.Dispose();
+        DisposeDevices(devices);
         Microsoft.Win32.SystemEvents.PowerModeChanged -= SystemEventsPowerModeChanged;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= SystemEventsDisplaySettingsChanged;
         base.OnFormClosing(e);
@@ -480,12 +481,14 @@ internal sealed class MainForm : Form
             currentThirdId = null;
         }
 
+        var previousDevices = devices;
         devices = CoreAudio.GetRenderDevices(PinnedDeviceIds(currentSourceId, currentFirstId, currentSecondId, currentThirdId));
         FillDeviceBox(sourceBox);
         FillDeviceBox(firstTargetBox);
         FillDeviceBox(secondTargetBox);
         FillDeviceBox(thirdTargetBox);
         ApplySettingsToControls(currentSourceId, currentFirstId, currentSecondId, currentThirdId);
+        DisposeDevices(previousDevices);
         UpdateFormatWarning();
         if (updateStatus)
         {
@@ -499,6 +502,14 @@ internal sealed class MainForm : Form
         foreach (var device in devices)
         {
             box.Items.Add(device);
+        }
+    }
+
+    private static void DisposeDevices(IEnumerable<AudioDeviceInfo> deviceInfos)
+    {
+        foreach (var device in deviceInfos)
+        {
+            device.Dispose();
         }
     }
 

@@ -37,7 +37,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         }
     }
 
-    private sealed class RenderSink
+    private sealed class RenderSink : IDisposable
     {
         private readonly object settingsLock = new();
         private readonly CoreAudio.IAudioClient audioClient;
@@ -162,46 +162,61 @@ internal sealed class WasapiMirrorEngine : IDisposable
             }
 
             renderClient.GetBuffer(framesToWrite, out var targetBuffer);
+            var releaseFlags = (flags & CoreAudio.BufferFlags.Silent) != 0
+                ? CoreAudio.BufferFlags.Silent
+                : CoreAudio.BufferFlags.None;
 
-            if ((flags & CoreAudio.BufferFlags.Silent) != 0)
+            try
             {
-                renderClient.ReleaseBuffer(framesToWrite, CoreAudio.BufferFlags.Silent);
+                if ((flags & CoreAudio.BufferFlags.Silent) != 0)
+                {
+                    WrittenFrames += framesToWrite;
+                    return;
+                }
+
+                var bytes = checked((int)(framesToWrite * blockAlign));
+                if (transfer.Length < bytes)
+                {
+                    transfer = new byte[bytes];
+                }
+
+                Marshal.Copy(sourceBuffer, transfer, 0, bytes);
+
+                lock (settingsLock)
+                {
+                    if (Math.Abs(gain - 1.0) > 0.001)
+                    {
+                        ApplyGain(transfer, bytes, gain, bits, validBits, formatTag, subFormat);
+                    }
+
+                    if (channelMode != ChannelMode.Stereo)
+                    {
+                        ApplyChannelMode(transfer, (int)framesToWrite, channels, bits, validBits, formatTag, subFormat, channelMode);
+                    }
+
+                    delayBuffer?.Process(transfer, bytes);
+                    level = SmoothLevel(level, CalculatePeak(transfer, bytes, bits, validBits, formatTag, subFormat));
+                }
+
+                Marshal.Copy(transfer, 0, targetBuffer, bytes);
                 WrittenFrames += framesToWrite;
-                return;
             }
-
-            var bytes = checked((int)(framesToWrite * blockAlign));
-            if (transfer.Length < bytes)
+            finally
             {
-                transfer = new byte[bytes];
+                renderClient.ReleaseBuffer(framesToWrite, releaseFlags);
             }
-
-            Marshal.Copy(sourceBuffer, transfer, 0, bytes);
-
-            lock (settingsLock)
-            {
-                if (Math.Abs(gain - 1.0) > 0.001)
-                {
-                    ApplyGain(transfer, bytes, gain, bits, validBits, formatTag, subFormat);
-                }
-
-                if (channelMode != ChannelMode.Stereo)
-                {
-                    ApplyChannelMode(transfer, (int)framesToWrite, channels, bits, validBits, formatTag, subFormat, channelMode);
-                }
-
-                delayBuffer?.Process(transfer, bytes);
-                level = SmoothLevel(level, CalculatePeak(transfer, bytes, bits, validBits, formatTag, subFormat));
-            }
-
-            Marshal.Copy(transfer, 0, targetBuffer, bytes);
-            renderClient.ReleaseBuffer(framesToWrite, CoreAudio.BufferFlags.None);
-            WrittenFrames += framesToWrite;
         }
 
         public void DecayLevel()
         {
             level *= 0.82f;
+        }
+
+        public void Dispose()
+        {
+            Stop();
+            ReleaseComObject(renderClient);
+            ReleaseComObject(audioClient);
         }
 
         private static void ApplyGain(byte[] data, int bytes, double gain, int bits, int validBits, ushort formatTag, Guid subFormat)
@@ -478,14 +493,16 @@ internal sealed class WasapiMirrorEngine : IDisposable
         {
         }
 
-        firstSink.Stop();
-        secondSink.Stop();
-        thirdSink?.Stop();
+        firstSink.Dispose();
+        secondSink.Dispose();
+        thirdSink?.Dispose();
         if (format != IntPtr.Zero)
         {
             CoreAudio.CoTaskMemFree(format);
         }
 
+        ReleaseComObject(captureClient);
+        ReleaseComObject(captureAudioClient);
         cancellation.Dispose();
     }
 
@@ -505,15 +522,22 @@ internal sealed class WasapiMirrorEngine : IDisposable
                 while (packetFrames != 0 && !cancellation.IsCancellationRequested)
                 {
                     captureClient.GetBuffer(out var sourceBuffer, out var frames, out var flags, out _, out _);
-                    Packets++;
-                    CapturedFrames += frames;
-                    SourceLevel = (flags & CoreAudio.BufferFlags.Silent) != 0
-                        ? SourceLevel * 0.82f
-                        : SmoothLevel(SourceLevel, CalculatePeak(sourceBuffer, (int)(frames * Format.BlockAlign), Format.Bits, Format.ValidBits, Format.FormatTag, Format.SubFormat));
-                    firstSink.Write(sourceBuffer, frames, flags);
-                    secondSink.Write(sourceBuffer, frames, flags);
-                    thirdSink?.Write(sourceBuffer, frames, flags);
-                    captureClient.ReleaseBuffer(frames);
+                    try
+                    {
+                        Packets++;
+                        CapturedFrames += frames;
+                        SourceLevel = (flags & CoreAudio.BufferFlags.Silent) != 0
+                            ? SourceLevel * 0.82f
+                            : SmoothLevel(SourceLevel, CalculatePeak(sourceBuffer, (int)(frames * Format.BlockAlign), Format.Bits, Format.ValidBits, Format.FormatTag, Format.SubFormat));
+                        firstSink.Write(sourceBuffer, frames, flags);
+                        secondSink.Write(sourceBuffer, frames, flags);
+                        thirdSink?.Write(sourceBuffer, frames, flags);
+                    }
+                    finally
+                    {
+                        captureClient.ReleaseBuffer(frames);
+                    }
+
                     captureClient.GetNextPacketSize(out packetFrames);
                 }
 
@@ -532,6 +556,23 @@ internal sealed class WasapiMirrorEngine : IDisposable
     private static float SmoothLevel(float previous, float current)
     {
         return Math.Max(current, previous * 0.82f);
+    }
+
+    private static void ReleaseComObject(object? instance)
+    {
+        if (instance is null || !Marshal.IsComObject(instance))
+        {
+            return;
+        }
+
+        try
+        {
+            Marshal.FinalReleaseComObject(instance);
+        }
+        catch
+        {
+            // COM cleanup is best-effort during audio shutdown.
+        }
     }
 
     private static float CalculatePeak(IntPtr data, int bytes, int bits, int validBits, ushort formatTag, Guid subFormat)

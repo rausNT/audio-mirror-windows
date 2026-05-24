@@ -1,6 +1,6 @@
 namespace AudioMirrorApp;
 
-internal sealed class AudioDeviceInfo
+internal sealed class AudioDeviceInfo : IDisposable
 {
     public required int Index { get; init; }
     public required string Id { get; init; }
@@ -10,6 +10,11 @@ internal sealed class AudioDeviceInfo
     public required CoreAudio.IMMDevice Device { get; init; }
 
     public bool IsActive => (State & CoreAudio.DeviceStateActive) != 0;
+
+    public void Dispose()
+    {
+        CoreAudio.ReleaseComObject(Device);
+    }
 
     public override string ToString()
     {

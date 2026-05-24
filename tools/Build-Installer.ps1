@@ -16,7 +16,7 @@ dotnet publish (Join-Path $root "AudioMirrorApp\AudioMirrorApp.csproj") `
     --configfile (Join-Path $root "AudioMirrorApp\NuGet.Config") `
     -c $Configuration `
     -r win-x64 `
-    --self-contained false `
+    --self-contained true `
     -p:PublishSingleFile=false `
     -o $publishDir
 if ($LASTEXITCODE -ne 0) {
@@ -35,6 +35,10 @@ Get-ChildItem -LiteralPath $publishDir -File |
 dotnet publish (Join-Path $root "AudioMirrorSetup\AudioMirrorSetup.csproj") `
     --configfile (Join-Path $root "AudioMirrorSetup\NuGet.Config") `
     -c $Configuration `
+    -r win-x64 `
+    --self-contained true `
+    -p:PublishSingleFile=true `
+    -p:PublishTrimmed=false `
     -o $installerOut
 if ($LASTEXITCODE -ne 0) {
     throw "AudioMirrorSetup publish failed with exit code $LASTEXITCODE"
@@ -45,8 +49,7 @@ if (Test-Path -LiteralPath $setupAssetZip) {
     Remove-Item -LiteralPath $setupAssetZip -Force
 }
 
-Get-ChildItem -LiteralPath $installerOut -File |
-    Where-Object { $_.Name -ne "AudioMirrorSetup.pdb" } |
+Get-ChildItem -LiteralPath $installerOut -File -Filter "AudioMirrorSetup.exe" |
     Compress-Archive -DestinationPath $setupAssetZip
 
 Write-Host "Installer:"

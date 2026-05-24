@@ -9,18 +9,36 @@ internal static class SettingsStore
         WriteIndented = true
     };
 
-    public static string SettingsPath => Path.Combine(AppContext.BaseDirectory, "settings.json");
+    private static string SettingsDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "AudioMirror");
+
+    private static string LegacySettingsPath => Path.Combine(AppContext.BaseDirectory, "settings.json");
+
+    public static string SettingsPath => Path.Combine(SettingsDirectory, "settings.json");
 
     public static AppSettings Load()
     {
         try
         {
-            if (!File.Exists(SettingsPath))
+            var path = File.Exists(SettingsPath)
+                ? SettingsPath
+                : File.Exists(LegacySettingsPath)
+                    ? LegacySettingsPath
+                    : "";
+
+            if (string.IsNullOrEmpty(path))
             {
                 return new AppSettings();
             }
 
-            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath), JsonOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) ?? new AppSettings();
+            if (string.Equals(path, LegacySettingsPath, StringComparison.OrdinalIgnoreCase) && !File.Exists(SettingsPath))
+            {
+                Save(settings);
+            }
+
+            return settings;
         }
         catch
         {
@@ -30,6 +48,7 @@ internal static class SettingsStore
 
     public static void Save(AppSettings settings)
     {
+        Directory.CreateDirectory(SettingsDirectory);
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
     }
 }

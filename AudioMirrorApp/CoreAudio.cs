@@ -259,6 +259,8 @@ internal static class CoreAudio
             {
                 CoTaskMemFree(format);
             }
+
+            ReleaseComObject(client);
         }
     }
 
@@ -284,6 +286,24 @@ internal static class CoreAudio
         finally
         {
             PropVariantClear(ref value);
+            ReleaseComObject(store);
+        }
+    }
+
+    public static void ReleaseComObject(object? instance)
+    {
+        if (instance is null || !Marshal.IsComObject(instance))
+        {
+            return;
+        }
+
+        try
+        {
+            Marshal.FinalReleaseComObject(instance);
+        }
+        catch
+        {
+            // COM cleanup is best-effort.
         }
     }
 }
