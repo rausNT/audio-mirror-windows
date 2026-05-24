@@ -57,6 +57,7 @@ internal sealed class MainForm : Form
     private readonly ToolStripMenuItem menuSyncItem = new("S&ync");
     private readonly ToolStripMenuItem menuTestItem = new("&Test speakers");
     private readonly ToolStripMenuItem menuSplitItem = new("Split &L/R") { CheckOnClick = true };
+    private readonly ToolStripMenuItem menuWizardItem = new("&Setup wizard");
     private readonly ToolStripMenuItem menuHelpItem = new("&User help");
     private readonly ToolStripMenuItem menuAboutItem = new("&About AudioMirror");
     private readonly NotifyIcon notifyIcon = new();
@@ -102,6 +103,12 @@ internal sealed class MainForm : Form
         ApplySettingsToControls();
         Shown += (_, _) =>
         {
+            if (!settings.OnboardingCompleted && !this.startAfterShown)
+            {
+                ShowSetupWizard(markCompleted: true);
+                return;
+            }
+
             if (this.startAfterShown)
             {
                 desiredMirroring = true;
@@ -231,6 +238,7 @@ internal sealed class MainForm : Form
         BuildLanguageMenu();
 
         helpMenu.DropDownItems.AddRange([
+            menuWizardItem,
             menuHelpItem,
             menuAboutItem
         ]);
@@ -319,6 +327,7 @@ internal sealed class MainForm : Form
                 splitLeftRightBox.Checked = menuSplitItem.Checked;
             }
         };
+        menuWizardItem.Click += (_, _) => ShowSetupWizard(markCompleted: true);
         menuHelpItem.Click += (_, _) => ShowHelp();
         menuAboutItem.Click += (_, _) => ShowAbout();
         trayOpenItem.Click += (_, _) => ShowMainWindow();
@@ -408,6 +417,7 @@ internal sealed class MainForm : Form
         menuSyncItem.Text = AppText.T("Sync");
         menuTestItem.Text = AppText.T("TestSpeakers");
         menuSplitItem.Text = AppText.T("SplitLR");
+        menuWizardItem.Text = AppText.T("SetupWizard");
         menuHelpItem.Text = AppText.T("UserHelp");
         menuAboutItem.Text = AppText.T("AboutAudioMirror");
 
@@ -788,7 +798,9 @@ internal sealed class MainForm : Form
             ThirdTargetEnabled = thirdTargetEnabledBox.Checked,
             SplitLeftRight = splitLeftRightBox.Checked,
             AutoRestart = autoRestartBox.Checked,
-            LanguageCode = settings.LanguageCode
+            LanguageCode = settings.LanguageCode,
+            OnboardingCompleted = settings.OnboardingCompleted,
+            TrayHintShown = settings.TrayHintShown
         };
     }
 
@@ -828,7 +840,8 @@ internal sealed class MainForm : Form
             AppText.F("FormatLine", engine.Format.SampleRate, engine.Format.Channels, engine.Format.Bits, splitLeftRightBox.Checked ? AppText.T("ModeSplit") : AppText.T("ModeStereo")) + Environment.NewLine +
             AppText.F("PacketsLine", engine.Packets, engine.CapturedFrames, engine.FirstWrittenFrames, engine.FirstDroppedFrames, engine.SecondWrittenFrames, engine.SecondDroppedFrames) +
             thirdStats +
-            error;
+            error +
+            (engine.CapturedFrames == 0 ? $"{Environment.NewLine}{AppText.T("NoAudioReachingSource")}" : "");
         UpdateMeters();
     }
 
@@ -1183,7 +1196,7 @@ internal sealed class MainForm : Form
         statusLabel.Text = AppText.T("SyncApplied");
     }
 
-    private static void OpenSoundSettings()
+    internal static void OpenSoundSettings()
     {
         Process.Start(new ProcessStartInfo("ms-settings:sound")
         {
@@ -1246,11 +1259,68 @@ internal sealed class MainForm : Form
         }
     }
 
+    private void ShowSetupWizard(bool markCompleted)
+    {
+        using var form = new SetupWizardForm(
+            devices,
+            SelectedDeviceId(sourceBox),
+            SelectedDeviceId(firstTargetBox),
+            SelectedDeviceId(secondTargetBox),
+            SelectedDeviceId(thirdTargetBox),
+            thirdTargetEnabledBox.Checked);
+        var result = Visible ? form.ShowDialog(this) : form.ShowDialog();
+        if (result != DialogResult.OK)
+        {
+            if (markCompleted)
+            {
+                settings.OnboardingCompleted = true;
+                SettingsStore.Save(settings);
+            }
+
+            return;
+        }
+
+        ApplyWizardSelection(form);
+        settings = ReadSettingsFromControls();
+        settings.OnboardingCompleted = true;
+        SettingsStore.Save(settings);
+        statusLabel.Text = AppText.T("WizardApplied");
+        if (form.StartAfterClose)
+        {
+            StartMirror();
+        }
+    }
+
+    private void ApplyWizardSelection(SetupWizardForm form)
+    {
+        SelectDevice(sourceBox, form.SourceDeviceId, null, null, 0);
+        SelectDevice(firstTargetBox, form.FirstTargetDeviceId, null, null, 0);
+        SelectDevice(secondTargetBox, form.SecondTargetDeviceId, null, null, 0);
+        thirdTargetEnabledBox.Checked = form.ThirdTargetEnabled;
+        if (form.ThirdTargetEnabled)
+        {
+            SelectDevice(thirdTargetBox, form.ThirdTargetDeviceId, null, null, 0);
+        }
+
+        UpdateThirdTargetState();
+        UpdateFormatWarning();
+    }
+
     private void HideToTray()
     {
         Hide();
         ShowInTaskbar = false;
         notifyIcon.Visible = true;
+        if (!settings.TrayHintShown)
+        {
+            settings.TrayHintShown = true;
+            SettingsStore.Save(settings);
+            notifyIcon.ShowBalloonTip(
+                3500,
+                AppText.T("TrayHintTitle"),
+                AppText.T("TrayHintBody"),
+                ToolTipIcon.Info);
+        }
     }
 
     private void ShowMainWindow()

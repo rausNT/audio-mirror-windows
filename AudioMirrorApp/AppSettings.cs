@@ -24,4 +24,6 @@ internal sealed class AppSettings
     public bool SplitLeftRight { get; set; } = false;
     public bool AutoRestart { get; set; } = true;
     public string LanguageCode { get; set; } = "en";
+    public bool OnboardingCompleted { get; set; } = false;
+    public bool TrayHintShown { get; set; } = false;
 }

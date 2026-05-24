@@ -8,10 +8,12 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.14";
+    private const string DisplayVersion = "0.9.15";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
+        "- Adds a first-run setup wizard for choosing Source, Targets, testing speakers, and starting mirroring.\n" +
+        "- Adds clearer no-audio guidance and a one-time tray notification when the window is closed.\n" +
         "- The setup package and installed app are now self-contained and do not require a separate .NET install.\n" +
         "- Settings are stored in the user profile instead of beside the app binaries.\n" +
         "- AudioMirror keeps retrying after display sleep until the selected audio devices wake up.\n" +
