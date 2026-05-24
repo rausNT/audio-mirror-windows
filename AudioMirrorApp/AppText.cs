@@ -117,7 +117,15 @@ internal static class AppText
         ["Finish"] = "Finish",
         ["NoAudioReachingSource"] = "No audio is reaching Source. Set Source as the Windows default output, then restart the browser or player.",
         ["TrayHintTitle"] = "AudioMirror is still running",
-        ["TrayHintBody"] = "The window was closed to the tray. Use the tray icon to open, stop, or exit AudioMirror."
+        ["TrayHintBody"] = "The window was closed to the tray. Use the tray icon to open, stop, or exit AudioMirror.",
+        ["TooltipSource"] = "Source is the Windows default output that AudioMirror captures from.",
+        ["TooltipTarget"] = "Target is a real speaker, monitor, or USB audio device where AudioMirror plays sound.",
+        ["TooltipGain"] = "1.0 means unchanged. Values above 1.0 can make audio louder but may distort.",
+        ["TooltipDelay"] = "Delay is used to align devices by ear and reduce echo.",
+        ["TooltipSplit"] = "Split L/R sends the left channel to Target 1 and the right channel to Target 2.",
+        ["TooltipAutoRestart"] = "Automatically recreates audio streams after sleep, display power-off, or endpoint reset.",
+        ["TooltipSafeLevels"] = "Lowers gains above 1.0 back to 1.0 to avoid distortion.",
+        ["TooltipTest"] = "Opens a speaker test for Left, Right, Third, Both, and Loop playback."
     };
 
     private static readonly Dictionary<string, Dictionary<string, string>> Languages = new(StringComparer.OrdinalIgnoreCase)

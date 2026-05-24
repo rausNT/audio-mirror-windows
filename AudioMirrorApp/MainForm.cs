@@ -447,6 +447,7 @@ internal sealed class MainForm : Form
         gainLabel.Text = AppText.T("Gain");
         delayLabel.Text = AppText.T("DelayMs");
         hintLabel.Text = AppText.T("Hint");
+        ApplyTooltips();
 
         foreach (var item in languageItems)
         {
@@ -462,6 +463,36 @@ internal sealed class MainForm : Form
         FitCommandButton(syncButton);
         FitCommandButton(testButton);
         UpdateCommandState();
+    }
+
+    private void ApplyTooltips()
+    {
+        SetTooltip(AppText.T("TooltipSource"), sourceLabel, sourceBox, sourceMeter);
+        SetTooltip(AppText.T("TooltipTarget"), firstTargetLabel, firstTargetBox, firstMeter);
+        SetTooltip(AppText.T("TooltipTarget"), secondTargetLabel, secondTargetBox, secondMeter);
+        SetTooltip(AppText.T("TooltipTarget"), thirdTargetEnabledBox, thirdTargetBox, thirdMeter);
+        SetTooltip(AppText.T("TooltipGain"), gainLabel, firstGainBox, secondGainBox, thirdGainBox);
+        SetTooltip(AppText.T("TooltipDelay"), delayLabel, firstDelayBox, secondDelayBox, thirdDelayBox);
+        SetTooltip(AppText.T("TooltipSplit"), splitLeftRightBox, menuSplitItem);
+        SetTooltip(AppText.T("TooltipAutoRestart"), autoRestartBox);
+        SetTooltip(AppText.T("TooltipSafeLevels"), syncButton, menuSyncItem);
+        SetTooltip(AppText.T("TooltipTest"), testButton, menuTestItem, trayTestItem);
+    }
+
+    private static void SetTooltip(string text, params object[] targets)
+    {
+        foreach (var target in targets)
+        {
+            switch (target)
+            {
+                case Control control:
+                    ToolTipProvider.SetToolTip(control, text);
+                    break;
+                case ToolStripItem item:
+                    item.ToolTipText = text;
+                    break;
+            }
+        }
     }
 
     private static void FitCommandButton(Button button)
