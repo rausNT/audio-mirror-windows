@@ -39,12 +39,23 @@ There are two release packages:
 Requirements:
 
 - Windows 11
-- .NET Desktop Runtime 10, or .NET SDK 10
+
+The release packages are self-contained and do not require installing .NET
+separately.
 
 ## Recommended Setup
 
 Use an unused playback endpoint as the Windows default output, then let
 AudioMirror send that sound to both real outputs.
+
+On first launch, AudioMirror opens a setup wizard:
+
+1. Choose Source: confirm the Windows default output device that AudioMirror
+   will capture from.
+2. Choose Targets: select the real speakers, monitors, or USB devices where
+   sound should play.
+3. Test speakers: verify Left, Right, optional Third, Both, and Loop playback.
+4. Start: save the routing and begin mirroring.
 
 Example device list:
 
@@ -85,9 +96,10 @@ Then press `Start`.
   the source right channel to `Target 2` as dual-mono. Turn it off for normal
   stereo mirroring.
 - Default gain is `1.0` and default delay is `0 ms` for all targets.
-- `Save`: writes `settings.json` next to the app.
+- `Save`: writes settings to `%LocalAppData%\AudioMirror\settings.json`.
 - `Autostart`: registers the app in the current user's Windows startup and
   starts mirroring automatically using saved settings.
+- `Safe levels`: lowers gains above `1.0` back to `1.0` to avoid distortion.
 - `Test`: opens a built-in speaker test with `Left`, `Right`, optional `Third`,
   `Both`, and `Loop`. It plays directly to the selected targets and animates
   the active speaker.
@@ -101,15 +113,19 @@ Then press `Start`.
 The main window also has a standard menu bar:
 
 - `File`: Start, Stop, Save settings, Autostart, Exit.
-- `Actions`: Refresh devices, Sound settings, Sync, Test speakers, Split L/R.
-- `Help`: User help and About.
+- `Actions`: Refresh devices, Sound settings, Safe levels, Test speakers,
+  Split L/R.
+- `Help`: Setup wizard, User help, and About.
 
 Minimize or close the window to keep AudioMirror running in the system tray.
 The tray menu can open the window, start/stop mirroring, open the speaker test,
 open Windows sound settings, show help, or exit the app.
 
-The status area shows captured and written frames. If captured frames stay at
-zero, the selected source device is not receiving the app/player audio.
+The status area starts with a human-readable state such as `Running normally`,
+`No source audio`, `Waiting for devices`, or `Target buffer dropping frames`.
+Raw captured/written counters remain visible below for diagnostics. If no
+audio reaches Source, set Source as the Windows default output and restart the
+browser or player.
 
 AudioMirror also reads the Windows mix format for the selected source and
 targets. If the two target formats differ, the app shows a warning. For cleaner
@@ -120,7 +136,7 @@ The small meters next to each device show live signal level while mirroring is
 running. They use a logarithmic dB-style scale so normal listening levels are
 visible, and their border color also acts as the format status: green means
 aligned, amber means possible resampling or target mismatch. Click a meter to
-open Windows sound settings. `Sync` applies the app-side safe defaults without
+open Windows sound settings. `Safe levels` lowers gains above `1.0` without
 changing Windows driver settings.
 
 ## PowerShell CLI
@@ -142,7 +158,7 @@ Stop with `Ctrl+C`.
 ## Build
 
 ```powershell
-dotnet publish .\AudioMirrorApp\AudioMirrorApp.csproj -c Release -r win-x64 --self-contained false -o .\dist\AudioMirrorApp
+dotnet publish .\AudioMirrorApp\AudioMirrorApp.csproj -c Release -r win-x64 --self-contained true -o .\dist\AudioMirrorApp
 ```
 
 The app has no NuGet package dependencies.
