@@ -317,9 +317,47 @@ internal sealed class SetupWizardForm : Form
             }
         }
 
+        if (box == sourceBox && TrySelectDefault(box))
+        {
+            return;
+        }
+
+        if (TrySelectFirstActive(box))
+        {
+            return;
+        }
+
         if (box.Items.Count > 0)
         {
-            box.SelectedIndex = Math.Min(box.Items.Count - 1, box == sourceBox && box.Items.Count > 1 ? 1 : 0);
+            box.SelectedIndex = 0;
         }
+    }
+
+    private static bool TrySelectDefault(ComboBox box)
+    {
+        for (var i = 0; i < box.Items.Count; i++)
+        {
+            if (box.Items[i] is AudioDeviceInfo { IsDefault: true })
+            {
+                box.SelectedIndex = i;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySelectFirstActive(ComboBox box)
+    {
+        for (var i = 0; i < box.Items.Count; i++)
+        {
+            if (box.Items[i] is AudioDeviceInfo { IsActive: true })
+            {
+                box.SelectedIndex = i;
+                return true;
+            }
+        }
+
+        return false;
     }
 }

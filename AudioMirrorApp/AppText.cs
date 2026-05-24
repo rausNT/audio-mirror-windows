@@ -103,7 +103,7 @@ internal static class AppText
         ["SetupWizard"] = "Setup wizard",
         ["SetupWizardTitle"] = "AudioMirror setup",
         ["WizardStepSourceTitle"] = "Step 1: choose Source",
-        ["WizardStepSourceBody"] = "Source must be the playback device that Windows sends sound to. In Windows sound settings, set this same device as the default output.",
+        ["WizardStepSourceBody"] = "Confirm Source. Source must be the playback device that Windows sends sound to. In Windows sound settings, set this same device as the default output.",
         ["WizardStepTargetsTitle"] = "Step 2: choose speakers",
         ["WizardStepTargetsBody"] = "Targets are the real speakers, monitors, or USB sound devices where AudioMirror will play sound.",
         ["WizardStepTestTitle"] = "Step 3: test and start",
