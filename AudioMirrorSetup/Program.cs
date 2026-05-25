@@ -8,10 +8,11 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.18";
+    private const string DisplayVersion = "0.9.19";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
+        "- Makes the speaker graphics in the test window clickable and improves their visual style.\n" +
         "- Detects muted or zero-volume Source/Target devices and adds a one-click Unmute / 100% fix.\n" +
         "- Fixes auto restart looping when Source receives no audio from the browser or player.\n" +
         "- Adds onboarding tooltips and Russian setup wizard localization.\n" +
