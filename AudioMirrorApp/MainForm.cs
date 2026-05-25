@@ -959,6 +959,12 @@ internal sealed class MainForm : Form
         lastWatchdogCapturedFrames = captured;
         lastWatchdogWrittenFrames = written;
 
+        if (captured == 0 && written == 0)
+        {
+            stalledWatchdogTicks = 0;
+            return;
+        }
+
         if (moved)
         {
             stalledWatchdogTicks = 0;

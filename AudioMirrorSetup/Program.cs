@@ -8,10 +8,11 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.16";
+    private const string DisplayVersion = "0.9.17";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
+        "- Fixes auto restart looping when Source receives no audio from the browser or player.\n" +
         "- Adds onboarding tooltips and Russian setup wizard localization.\n" +
         "- Improves setup wizard device preselection and status messages.\n" +
         "- Documents the setup wizard flow in README.\n" +
