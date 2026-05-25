@@ -8,10 +8,12 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.19";
+    private const string DisplayVersion = "0.9.20";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
+        "- Keeps setup confirmation dialogs in front of AudioMirror during install and restart.\n" +
+        "- Clarifies that a silent Source can simply mean nothing is playing yet.\n" +
         "- Makes the speaker graphics in the test window clickable and improves their visual style.\n" +
         "- Detects muted or zero-volume Source/Target devices and adds a one-click Unmute / 100% fix.\n" +
         "- Fixes auto restart looping when Source receives no audio from the browser or player.\n" +
@@ -33,7 +35,7 @@ internal static class Program
             var installedVersion = GetInstalledVersion(installDir);
             var runningBeforeInstall = IsAudioMirrorRunning(installDir);
 
-            var result = MessageBox.Show(
+            var result = ShowSetupMessage(
                 BuildInstallPrompt(installedVersion, runningBeforeInstall),
                 "AudioMirror Setup",
                 MessageBoxButtons.OKCancel,
@@ -54,7 +56,7 @@ internal static class Program
             if (runningBeforeInstall || stoppedRunningApp)
             {
                 LaunchAudioMirror(installDir, "--start");
-                MessageBox.Show(
+                ShowSetupMessage(
                     $"AudioMirror {DisplayVersion} was installed successfully.\n\nAudioMirror was restarted with mirroring enabled.",
                     "AudioMirror Setup",
                     MessageBoxButtons.OK,
@@ -62,7 +64,7 @@ internal static class Program
                 return;
             }
 
-            var launch = MessageBox.Show(
+            var launch = ShowSetupMessage(
                 $"AudioMirror {DisplayVersion} was installed successfully.\n\nLaunch it now?",
                 "AudioMirror Setup",
                 MessageBoxButtons.YesNo,
@@ -75,11 +77,38 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            ShowSetupMessage(
                 ex.Message,
                 "AudioMirror Setup failed",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+    }
+
+    private static DialogResult ShowSetupMessage(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon)
+    {
+        using var owner = new Form
+        {
+            StartPosition = FormStartPosition.Manual,
+            ShowInTaskbar = false,
+            FormBorderStyle = FormBorderStyle.FixedToolWindow,
+            Size = new Size(1, 1),
+            Opacity = 0,
+            TopMost = true
+        };
+
+        var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
+        owner.Location = new Point(screen.Left + screen.Width / 2, screen.Top + screen.Height / 2);
+        owner.Show();
+        owner.Activate();
+
+        try
+        {
+            return MessageBox.Show(owner, text, caption, buttons, icon);
+        }
+        finally
+        {
+            owner.Close();
         }
     }
 
