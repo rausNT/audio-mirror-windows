@@ -32,6 +32,7 @@ internal sealed class MainForm : Form
     private readonly Button saveButton = new() { Text = "Save" };
     private readonly Button startupButton = new() { Text = "Autostart" };
     private readonly Button soundSettingsButton = new() { Text = "Sound settings" };
+    private readonly Button fixVolumeButton = new() { Text = "Unmute / 100%" };
     private readonly Button syncButton = new() { Text = "Sync" };
     private readonly Button testButton = new() { Text = "Test" };
     private readonly CheckBox splitLeftRightBox = new() { Text = "Split L/R", AutoSize = true };
@@ -198,7 +199,7 @@ internal sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 12, 0, 8)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, syncButton, testButton, splitLeftRightBox, autoRestartBox]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, fixVolumeButton, syncButton, testButton, splitLeftRightBox, autoRestartBox]);
 
         statusLabel.BorderStyle = BorderStyle.FixedSingle;
         statusLabel.Padding = new Padding(8);
@@ -309,6 +310,7 @@ internal sealed class MainForm : Form
         saveButton.Click += (_, _) => SaveSettingsFromControls();
         startupButton.Click += (_, _) => RegisterStartup();
         soundSettingsButton.Click += (_, _) => OpenSoundSettings();
+        fixVolumeButton.Click += (_, _) => FixSelectedDeviceVolumes();
         syncButton.Click += (_, _) => SyncAppSettings();
         testButton.Click += (_, _) => OpenTestWindow();
         menuStartItem.Click += (_, _) => StartMirror();
@@ -435,6 +437,7 @@ internal sealed class MainForm : Form
         saveButton.Text = AppText.T("Save");
         startupButton.Text = AppText.T("Autostart");
         soundSettingsButton.Text = AppText.T("Sound");
+        fixVolumeButton.Text = AppText.T("FixVolume");
         syncButton.Text = AppText.T("Sync");
         testButton.Text = AppText.T("Test");
         splitLeftRightBox.Text = AppText.T("SplitLR");
@@ -460,6 +463,7 @@ internal sealed class MainForm : Form
         FitCommandButton(saveButton);
         FitCommandButton(startupButton);
         FitCommandButton(soundSettingsButton);
+        FitCommandButton(fixVolumeButton);
         FitCommandButton(syncButton);
         FitCommandButton(testButton);
         UpdateCommandState();
@@ -475,6 +479,7 @@ internal sealed class MainForm : Form
         SetTooltip(AppText.T("TooltipDelay"), delayLabel, firstDelayBox, secondDelayBox, thirdDelayBox);
         SetTooltip(AppText.T("TooltipSplit"), splitLeftRightBox, menuSplitItem);
         SetTooltip(AppText.T("TooltipAutoRestart"), autoRestartBox);
+        SetTooltip(AppText.T("TooltipFixVolume"), fixVolumeButton);
         SetTooltip(AppText.T("TooltipSafeLevels"), syncButton, menuSyncItem);
         SetTooltip(AppText.T("TooltipTest"), testButton, menuTestItem, trayTestItem);
     }
@@ -1184,24 +1189,27 @@ internal sealed class MainForm : Form
             var firstFormat = CoreAudio.GetMixFormat(firstTarget.Device);
             var secondFormat = CoreAudio.GetMixFormat(secondTarget.Device);
             var thirdFormat = thirdTarget is null ? null : CoreAudio.GetMixFormat(thirdTarget.Device);
+            var volumeWarnings = GetVolumeWarnings(source, firstTarget, secondTarget, thirdTarget);
             var targetsMatch = firstFormat.Matches(secondFormat) && (thirdFormat is null || firstFormat.Matches(thirdFormat));
             var allMatch = sourceFormat.Matches(firstFormat) && sourceFormat.Matches(secondFormat) && (thirdFormat is null || sourceFormat.Matches(thirdFormat));
             var sourceMatchesTargets = sourceFormat.Matches(firstFormat) || sourceFormat.Matches(secondFormat) || (thirdFormat is not null && sourceFormat.Matches(thirdFormat));
 
-            SetFormatMeter(sourceMeter, sourceMatchesTargets || allMatch, AppText.F("FormatTooltip", AppText.T("Source"), sourceFormat.DisplayName));
-            SetFormatMeter(firstMeter, firstFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target1"), firstFormat.DisplayName));
-            SetFormatMeter(secondMeter, secondFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target2"), secondFormat.DisplayName));
-            SetFormatMeter(thirdMeter, thirdFormat is null || thirdFormat.Matches(sourceFormat) && targetsMatch, AppText.F("FormatTooltip", AppText.T("Target3"), thirdFormat?.DisplayName ?? AppText.T("Stopped")));
+            SetFormatMeter(sourceMeter, (sourceMatchesTargets || allMatch) && !volumeWarnings.SourceSilent, AppText.F("FormatTooltip", AppText.T("Source"), sourceFormat.DisplayName), volumeWarnings.Source);
+            SetFormatMeter(firstMeter, firstFormat.Matches(sourceFormat) && targetsMatch && !volumeWarnings.FirstSilent, AppText.F("FormatTooltip", AppText.T("Target1"), firstFormat.DisplayName), volumeWarnings.First);
+            SetFormatMeter(secondMeter, secondFormat.Matches(sourceFormat) && targetsMatch && !volumeWarnings.SecondSilent, AppText.F("FormatTooltip", AppText.T("Target2"), secondFormat.DisplayName), volumeWarnings.Second);
+            SetFormatMeter(thirdMeter, thirdFormat is null || thirdFormat.Matches(sourceFormat) && targetsMatch && !volumeWarnings.ThirdSilent, AppText.F("FormatTooltip", AppText.T("Target3"), thirdFormat?.DisplayName ?? AppText.T("Stopped")), volumeWarnings.Third);
 
             formatLabel.Text =
-                (allMatch
+                (volumeWarnings.Text is not null
+                    ? AppText.F("EndpointVolumeWarning", volumeWarnings.Text)
+                    : allMatch
                     ? AppText.F("FormatMatch", sourceFormat.DisplayName)
                     : targetsMatch
                         ? AppText.F("TargetsMatch", firstFormat.DisplayName, sourceFormat.DisplayName)
                         : AppText.F("TargetFormatsDiffer", firstFormat.DisplayName, secondFormat.DisplayName));
 
             formatLabel.BackColor = SystemColors.Control;
-            formatLabel.ForeColor = allMatch || targetsMatch ? Color.FromArgb(20, 110, 45) : Color.FromArgb(160, 95, 0);
+            formatLabel.ForeColor = volumeWarnings.Text is null && (allMatch || targetsMatch) ? Color.FromArgb(20, 110, 45) : Color.FromArgb(160, 95, 0);
         }
         catch (Exception ex)
         {
@@ -1215,10 +1223,56 @@ internal sealed class MainForm : Form
         }
     }
 
-    private static void SetFormatMeter(LevelMeter meter, bool ok, string tooltipText)
+    private static void SetFormatMeter(LevelMeter meter, bool ok, string tooltipText, string? volumeWarning = null)
     {
         meter.StatusColor = ok ? Color.FromArgb(45, 170, 80) : Color.FromArgb(230, 175, 45);
-        ToolTipProvider.SetToolTip(meter, $"{tooltipText}. {AppText.T("OpenSoundTooltip")}");
+        var warning = string.IsNullOrWhiteSpace(volumeWarning) ? "" : $" {volumeWarning}.";
+        ToolTipProvider.SetToolTip(meter, $"{tooltipText}.{warning} {AppText.T("OpenSoundTooltip")}");
+    }
+
+    private (string? Text, string? Source, string? First, string? Second, string? Third, bool SourceSilent, bool FirstSilent, bool SecondSilent, bool ThirdSilent) GetVolumeWarnings(
+        AudioDeviceInfo source,
+        AudioDeviceInfo firstTarget,
+        AudioDeviceInfo secondTarget,
+        AudioDeviceInfo? thirdTarget)
+    {
+        var sourceWarning = GetVolumeWarning(AppText.T("Source"), source);
+        var firstWarning = GetVolumeWarning(AppText.T("Target1"), firstTarget);
+        var secondWarning = GetVolumeWarning(AppText.T("Target2"), secondTarget);
+        (string? Text, bool Silent)? thirdWarning = thirdTarget is null ? null : GetVolumeWarning(AppText.T("Target3"), thirdTarget);
+        var text = new[] { sourceWarning.Text, firstWarning.Text, secondWarning.Text, thirdWarning?.Text }
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        return (
+            text,
+            sourceWarning.Text,
+            firstWarning.Text,
+            secondWarning.Text,
+            thirdWarning?.Text,
+            sourceWarning.Silent,
+            firstWarning.Silent,
+            secondWarning.Silent,
+            thirdWarning?.Silent ?? false);
+    }
+
+    private static (string? Text, bool Silent) GetVolumeWarning(string role, AudioDeviceInfo device)
+    {
+        var volume = CoreAudio.GetEndpointVolumeInfo(device.Device);
+        if (volume.Muted)
+        {
+            return (AppText.F("EndpointMuted", role), true);
+        }
+
+        if (volume.Volume <= 0.001f)
+        {
+            return (AppText.F("EndpointVolumeZero", role), true);
+        }
+
+        if (volume.Volume < 0.05f)
+        {
+            return (AppText.F("EndpointVolumeLow", role, (int)Math.Round(volume.Volume * 100)), false);
+        }
+
+        return (null, false);
     }
 
     private static string DeviceStateText(AudioDeviceInfo device)
@@ -1248,6 +1302,39 @@ internal sealed class MainForm : Form
         PushLiveSettings();
         UpdateFormatWarning();
         statusLabel.Text = AppText.T("SyncApplied");
+    }
+
+    private void FixSelectedDeviceVolumes()
+    {
+        try
+        {
+            if (sourceBox.SelectedItem is AudioDeviceInfo source)
+            {
+                CoreAudio.SetEndpointVolume(source.Device, muted: false, volume: 1.0f);
+            }
+
+            if (firstTargetBox.SelectedItem is AudioDeviceInfo firstTarget)
+            {
+                CoreAudio.SetEndpointVolume(firstTarget.Device, muted: false, volume: 1.0f);
+            }
+
+            if (secondTargetBox.SelectedItem is AudioDeviceInfo secondTarget)
+            {
+                CoreAudio.SetEndpointVolume(secondTarget.Device, muted: false, volume: 1.0f);
+            }
+
+            if (thirdTargetEnabledBox.Checked && thirdTargetBox.SelectedItem is AudioDeviceInfo thirdTarget)
+            {
+                CoreAudio.SetEndpointVolume(thirdTarget.Device, muted: false, volume: 1.0f);
+            }
+
+            UpdateFormatWarning();
+            statusLabel.Text = AppText.T("FixVolumeApplied");
+        }
+        catch (Exception ex)
+        {
+            statusLabel.Text = AppText.F("FixVolumeFailed", ex.Message);
+        }
     }
 
     internal static void OpenSoundSettings()

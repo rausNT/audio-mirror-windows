@@ -142,6 +142,31 @@ internal static class CoreAudio
         void ReleaseBuffer(uint framesWritten, BufferFlags flags);
     }
 
+    [ComImport]
+    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IAudioEndpointVolume
+    {
+        void RegisterControlChangeNotify(IntPtr client);
+        void UnregisterControlChangeNotify(IntPtr client);
+        void GetChannelCount(out uint channelCount);
+        void SetMasterVolumeLevel(float levelDb, ref Guid eventContext);
+        void SetMasterVolumeLevelScalar(float level, ref Guid eventContext);
+        void GetMasterVolumeLevel(out float levelDb);
+        void GetMasterVolumeLevelScalar(out float level);
+        void SetChannelVolumeLevel(uint channelNumber, float levelDb, ref Guid eventContext);
+        void SetChannelVolumeLevelScalar(uint channelNumber, float level, ref Guid eventContext);
+        void GetChannelVolumeLevel(uint channelNumber, out float levelDb);
+        void GetChannelVolumeLevelScalar(uint channelNumber, out float level);
+        void SetMute([MarshalAs(UnmanagedType.Bool)] bool isMuted, ref Guid eventContext);
+        void GetMute([MarshalAs(UnmanagedType.Bool)] out bool isMuted);
+        void GetVolumeStepInfo(out uint step, out uint stepCount);
+        void VolumeStepUp(ref Guid eventContext);
+        void VolumeStepDown(ref Guid eventContext);
+        void QueryHardwareSupport(out uint hardwareSupportMask);
+        void GetVolumeRange(out float volumeMinDb, out float volumeMaxDb, out float volumeIncrementDb);
+    }
+
     public const uint DeviceStateActive = 0x00000001;
     public const uint DeviceStateDisabled = 0x00000002;
     public const uint DeviceStateNotPresent = 0x00000004;
@@ -152,6 +177,7 @@ internal static class CoreAudio
     public static readonly Guid IAudioClientId = new("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2");
     public static readonly Guid IAudioCaptureClientId = new("C8ADBD64-E71E-48a0-A4DE-185C395CD317");
     public static readonly Guid IAudioRenderClientId = new("F294ACFC-3146-4483-A7BF-ADDCA7C260E2");
+    public static readonly Guid IAudioEndpointVolumeId = new("5CDF2C82-841E-4546-9722-0CF74078229A");
     private static readonly Guid MMDeviceEnumeratorId = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
     public static readonly Guid IeeeFloatSubFormat = new("00000003-0000-0010-8000-00AA00389B71");
     public static readonly Guid PcmSubFormat = new("00000001-0000-0010-8000-00AA00389B71");
@@ -261,6 +287,40 @@ internal static class CoreAudio
             }
 
             ReleaseComObject(client);
+        }
+    }
+
+    public static AudioEndpointVolumeInfo GetEndpointVolumeInfo(IMMDevice device)
+    {
+        var iid = IAudioEndpointVolumeId;
+        device.Activate(ref iid, ClsCtxAll, IntPtr.Zero, out var endpointVolumeObject);
+        var endpointVolume = (IAudioEndpointVolume)endpointVolumeObject;
+        try
+        {
+            endpointVolume.GetMute(out var muted);
+            endpointVolume.GetMasterVolumeLevelScalar(out var volume);
+            return new AudioEndpointVolumeInfo(muted, volume);
+        }
+        finally
+        {
+            ReleaseComObject(endpointVolume);
+        }
+    }
+
+    public static void SetEndpointVolume(IMMDevice device, bool muted, float volume)
+    {
+        var iid = IAudioEndpointVolumeId;
+        device.Activate(ref iid, ClsCtxAll, IntPtr.Zero, out var endpointVolumeObject);
+        var endpointVolume = (IAudioEndpointVolume)endpointVolumeObject;
+        try
+        {
+            var context = Guid.Empty;
+            endpointVolume.SetMute(muted, ref context);
+            endpointVolume.SetMasterVolumeLevelScalar(Math.Clamp(volume, 0f, 1f), ref context);
+        }
+        finally
+        {
+            ReleaseComObject(endpointVolume);
         }
     }
 
