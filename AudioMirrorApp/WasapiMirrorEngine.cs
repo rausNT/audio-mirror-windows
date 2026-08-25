@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace AudioMirrorApp;
@@ -19,6 +20,12 @@ internal sealed class WasapiMirrorEngine : IDisposable
         public DelayBuffer(int bytes)
         {
             buffer = new byte[Math.Max(bytes, 1)];
+        }
+
+        public void Reset()
+        {
+            Array.Clear(buffer);
+            offset = 0;
         }
 
         public void Process(byte[] data, int bytes)
@@ -146,7 +153,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
             }
         }
 
-        public void Write(IntPtr sourceBuffer, uint frames, CoreAudio.BufferFlags flags)
+        public void Write(IntPtr sourceBuffer, uint frames, CoreAudio.BufferFlags flags, double sourceVolume)
         {
             audioClient.GetCurrentPadding(out var padding);
             var available = bufferFrames > padding ? bufferFrames - padding : 0;
@@ -162,14 +169,21 @@ internal sealed class WasapiMirrorEngine : IDisposable
             }
 
             renderClient.GetBuffer(framesToWrite, out var targetBuffer);
-            var releaseFlags = (flags & CoreAudio.BufferFlags.Silent) != 0
+            var sourceSilent = (flags & CoreAudio.BufferFlags.Silent) != 0 || sourceVolume <= 0.001;
+            var releaseFlags = sourceSilent
                 ? CoreAudio.BufferFlags.Silent
                 : CoreAudio.BufferFlags.None;
 
             try
             {
-                if ((flags & CoreAudio.BufferFlags.Silent) != 0)
+                if (sourceSilent)
                 {
+                    lock (settingsLock)
+                    {
+                        delayBuffer?.Reset();
+                        level *= 0.82f;
+                    }
+
                     WrittenFrames += framesToWrite;
                     return;
                 }
@@ -184,9 +198,10 @@ internal sealed class WasapiMirrorEngine : IDisposable
 
                 lock (settingsLock)
                 {
-                    if (Math.Abs(gain - 1.0) > 0.001)
+                    var effectiveGain = gain * sourceVolume;
+                    if (Math.Abs(effectiveGain - 1.0) > 0.001)
                     {
-                        ApplyGain(transfer, bytes, gain, bits, validBits, formatTag, subFormat);
+                        ApplyGain(transfer, bytes, effectiveGain, bits, validBits, formatTag, subFormat);
                     }
 
                     if (channelMode != ChannelMode.Stereo)
@@ -329,10 +344,13 @@ internal sealed class WasapiMirrorEngine : IDisposable
     private readonly Task worker;
     private readonly CoreAudio.IAudioClient captureAudioClient;
     private readonly CoreAudio.IAudioCaptureClient captureClient;
+    private readonly CoreAudio.IAudioEndpointVolume sourceEndpointVolume;
     private readonly RenderSink firstSink;
     private readonly RenderSink secondSink;
     private readonly RenderSink? thirdSink;
     private readonly IntPtr format;
+    private AudioEndpointVolumeInfo sourceEndpointVolumeInfo = new(false, 1.0f);
+    private long lastSourceEndpointVolumeRead;
 
     public WasapiMirrorEngine(
         AudioDeviceInfo source,
@@ -364,6 +382,7 @@ internal sealed class WasapiMirrorEngine : IDisposable
         ThirdTargetName = thirdTarget?.Name;
 
         captureAudioClient = CoreAudio.ActivateAudioClient(source.Device);
+        sourceEndpointVolume = CoreAudio.ActivateEndpointVolume(source.Device);
         captureAudioClient.GetMixFormat(out format);
         Format = AudioFormatInfo.FromPointer(format);
 
@@ -503,7 +522,32 @@ internal sealed class WasapiMirrorEngine : IDisposable
 
         ReleaseComObject(captureClient);
         ReleaseComObject(captureAudioClient);
+        ReleaseComObject(sourceEndpointVolume);
         cancellation.Dispose();
+    }
+
+    private AudioEndpointVolumeInfo ReadSourceEndpointVolume()
+    {
+        var now = Stopwatch.GetTimestamp();
+        var elapsedMs = (now - lastSourceEndpointVolumeRead) * 1000.0 / Stopwatch.Frequency;
+        if (elapsedMs < 50)
+        {
+            return sourceEndpointVolumeInfo;
+        }
+
+        lastSourceEndpointVolumeRead = now;
+        try
+        {
+            sourceEndpointVolume.GetMute(out var muted);
+            sourceEndpointVolume.GetMasterVolumeLevelScalar(out var volume);
+            sourceEndpointVolumeInfo = new AudioEndpointVolumeInfo(muted, volume);
+        }
+        catch
+        {
+            sourceEndpointVolumeInfo = new AudioEndpointVolumeInfo(false, 1.0f);
+        }
+
+        return sourceEndpointVolumeInfo;
     }
 
     private void CaptureLoop()
@@ -526,12 +570,14 @@ internal sealed class WasapiMirrorEngine : IDisposable
                     {
                         Packets++;
                         CapturedFrames += frames;
-                        SourceLevel = (flags & CoreAudio.BufferFlags.Silent) != 0
+                        var sourceVolume = ReadSourceEndpointVolume();
+                        var sourceLevelMultiplier = sourceVolume.IsSilent ? 0.0 : sourceVolume.Volume;
+                        SourceLevel = (flags & CoreAudio.BufferFlags.Silent) != 0 || sourceVolume.IsSilent
                             ? SourceLevel * 0.82f
-                            : SmoothLevel(SourceLevel, CalculatePeak(sourceBuffer, (int)(frames * Format.BlockAlign), Format.Bits, Format.ValidBits, Format.FormatTag, Format.SubFormat));
-                        firstSink.Write(sourceBuffer, frames, flags);
-                        secondSink.Write(sourceBuffer, frames, flags);
-                        thirdSink?.Write(sourceBuffer, frames, flags);
+                            : SmoothLevel(SourceLevel, CalculatePeak(sourceBuffer, (int)(frames * Format.BlockAlign), Format.Bits, Format.ValidBits, Format.FormatTag, Format.SubFormat) * (float)sourceLevelMultiplier);
+                        firstSink.Write(sourceBuffer, frames, flags, sourceLevelMultiplier);
+                        secondSink.Write(sourceBuffer, frames, flags, sourceLevelMultiplier);
+                        thirdSink?.Write(sourceBuffer, frames, flags, sourceLevelMultiplier);
                     }
                     finally
                     {

@@ -8,10 +8,11 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.20";
+    private const string DisplayVersion = "0.9.21";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
+        "- Makes keyboard Mute and Windows Source volume affect mirrored Target audio.\n" +
         "- Keeps setup confirmation dialogs in front of AudioMirror during install and restart.\n" +
         "- Clarifies that a silent Source can simply mean nothing is playing yet.\n" +
         "- Makes the speaker graphics in the test window clickable and improves their visual style.\n" +

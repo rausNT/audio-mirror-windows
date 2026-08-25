@@ -292,9 +292,7 @@ internal static class CoreAudio
 
     public static AudioEndpointVolumeInfo GetEndpointVolumeInfo(IMMDevice device)
     {
-        var iid = IAudioEndpointVolumeId;
-        device.Activate(ref iid, ClsCtxAll, IntPtr.Zero, out var endpointVolumeObject);
-        var endpointVolume = (IAudioEndpointVolume)endpointVolumeObject;
+        var endpointVolume = ActivateEndpointVolume(device);
         try
         {
             endpointVolume.GetMute(out var muted);
@@ -307,11 +305,16 @@ internal static class CoreAudio
         }
     }
 
-    public static void SetEndpointVolume(IMMDevice device, bool muted, float volume)
+    public static IAudioEndpointVolume ActivateEndpointVolume(IMMDevice device)
     {
         var iid = IAudioEndpointVolumeId;
         device.Activate(ref iid, ClsCtxAll, IntPtr.Zero, out var endpointVolumeObject);
-        var endpointVolume = (IAudioEndpointVolume)endpointVolumeObject;
+        return (IAudioEndpointVolume)endpointVolumeObject;
+    }
+
+    public static void SetEndpointVolume(IMMDevice device, bool muted, float volume)
+    {
+        var endpointVolume = ActivateEndpointVolume(device);
         try
         {
             var context = Guid.Empty;
