@@ -1,6 +1,7 @@
 namespace AudioMirrorApp;
 
 using System.ComponentModel;
+using System.Drawing.Drawing2D;
 
 internal sealed class LevelMeter : Control
 {
@@ -14,6 +15,7 @@ internal sealed class LevelMeter : Control
         Height = 18;
         DoubleBuffered = true;
         TabStop = false;
+        BackColor = FluentTheme.Current.SurfaceAlt;
     }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -47,11 +49,16 @@ internal sealed class LevelMeter : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        e.Graphics.Clear(Parent?.BackColor ?? SystemColors.Control);
-
-        using var borderPen = new Pen(statusColor, 1f);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var colors = FluentTheme.Current;
+        var parentBackColor = Parent?.BackColor ?? colors.Window;
+        e.Graphics.Clear(parentBackColor == Color.Transparent ? colors.Surface : parentBackColor);
         var border = new Rectangle(0, 0, Width - 1, Height - 1);
-        e.Graphics.DrawRectangle(borderPen, border);
+        using var backgroundPath = RoundedRect(border, 4);
+        using var backgroundBrush = new SolidBrush(Enabled ? BackColor : FluentTheme.Blend(colors.SecondaryText, colors.Surface, 0.08f));
+        using var borderPen = new Pen(Enabled ? statusColor : colors.Border, 1f);
+        e.Graphics.FillPath(backgroundBrush, backgroundPath);
+        e.Graphics.DrawPath(borderPen, backgroundPath);
 
         var columns = history.Length;
         var segments = 6;
@@ -72,11 +79,27 @@ internal sealed class LevelMeter : Control
                 var y = Height - 3 - (segment + 1) * segmentHeight - segment;
                 var color = segment < activeSegments
                     ? SegmentColor(normalized)
-                    : Color.FromArgb(36, 44, 42);
+                    : FluentTheme.Blend(colors.SecondaryText, BackColor, colors.Dark ? 0.24f : 0.16f);
                 using var brush = new SolidBrush(color);
                 e.Graphics.FillRectangle(brush, x, y, columnWidth, segmentHeight);
             }
         }
+    }
+
+    private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+    {
+        var path = new GraphicsPath();
+        var diameter = radius * 2;
+        var arc = new Rectangle(bounds.Location, new Size(diameter, diameter));
+        path.AddArc(arc, 180, 90);
+        arc.X = bounds.Right - diameter;
+        path.AddArc(arc, 270, 90);
+        arc.Y = bounds.Bottom - diameter;
+        path.AddArc(arc, 0, 90);
+        arc.X = bounds.Left;
+        path.AddArc(arc, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 
     private static float ToDisplayLevel(float linearLevel)

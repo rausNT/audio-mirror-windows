@@ -30,8 +30,8 @@ internal sealed class SetupWizardForm : Form
         this.devices = devices;
         Text = AppText.T("SetupWizardTitle");
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(660, 430);
-        MinimumSize = new Size(560, 380);
+        ClientSize = new Size(700, 460);
+        MinimumSize = new Size(620, 420);
 
         foreach (var device in devices)
         {
@@ -50,6 +50,7 @@ internal sealed class SetupWizardForm : Form
 
         BuildLayout();
         ShowStep(0);
+        ApplyVisualTheme();
     }
 
     public string? SourceDeviceId => SelectedDevice(sourceBox)?.Id;
@@ -66,16 +67,17 @@ internal sealed class SetupWizardForm : Form
             Dock = DockStyle.Fill,
             RowCount = 4,
             ColumnCount = 1,
-            Padding = new Padding(18)
+            Padding = new Padding(22, 18, 22, 18)
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        titleLabel.Font = new Font(Font.FontFamily, 15, FontStyle.Bold);
+        titleLabel.Font = FluentTheme.Font(18f, FontStyle.Bold);
         titleLabel.Margin = new Padding(0, 0, 0, 12);
         bodyLabel.Margin = new Padding(0, 0, 0, 12);
+        bodyLabel.Font = FluentTheme.Font(9.5f);
 
         var actionPanel = new FlowLayoutPanel
         {
@@ -144,6 +146,19 @@ internal sealed class SetupWizardForm : Form
         thirdTargetEnabledBox.CheckedChanged += (_, _) => thirdTargetBox.Enabled = thirdTargetEnabledBox.Checked;
     }
 
+    private void ApplyVisualTheme()
+    {
+        var colors = FluentTheme.Current;
+        FluentTheme.ApplyWindow(this);
+        bodyLabel.ForeColor = colors.SecondaryText;
+        FluentTheme.StyleButton(nextButton, colors, primary: true);
+        FluentTheme.StyleButton(startButton, colors, primary: true);
+        foreach (var button in new[] { backButton, cancelButton, soundButton, testButton })
+        {
+            FluentTheme.StyleButton(button, colors);
+        }
+    }
+
     private void ShowStep(int nextStep)
     {
         step = Math.Clamp(nextStep, 0, 2);
@@ -172,6 +187,7 @@ internal sealed class SetupWizardForm : Form
         nextButton.Text = step == 2 ? AppText.T("Finish") : AppText.T("Next");
         testButton.Enabled = step == 2;
         startButton.Enabled = step == 2;
+        ApplyVisualTheme();
     }
 
     private Control BuildSourceStep()
@@ -193,16 +209,22 @@ internal sealed class SetupWizardForm : Form
 
     private Control BuildSummaryStep()
     {
+        var card = new CardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(14)
+        };
         var summary = new TextBox
         {
             Dock = DockStyle.Fill,
             Multiline = true,
             ReadOnly = true,
-            BorderStyle = BorderStyle.FixedSingle,
+            BorderStyle = BorderStyle.None,
             Text = BuildSummaryText(),
-            Font = new Font(FontFamily.GenericSansSerif, 10)
+            Font = FluentTheme.Font(10f)
         };
-        return summary;
+        card.Controls.Add(summary);
+        return card;
     }
 
     private Control BuildGrid((string Label, Control Control)[] rows)
@@ -222,7 +244,7 @@ internal sealed class SetupWizardForm : Form
         for (var i = 0; i < rows.Length; i++)
         {
             grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            grid.Controls.Add(new Label { Text = rows[i].Label, AutoSize = true, Padding = new Padding(0, 7, 0, 0) }, 0, i + 1);
+            grid.Controls.Add(new Label { Text = rows[i].Label, AutoSize = true, Padding = new Padding(0, 7, 0, 0), Font = FluentTheme.Font(9.5f) }, 0, i + 1);
             rows[i].Control.Margin = new Padding(0, 3, 0, 3);
             grid.Controls.Add(rows[i].Control, 1, i + 1);
         }

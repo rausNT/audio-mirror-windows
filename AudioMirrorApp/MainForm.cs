@@ -37,6 +37,13 @@ internal sealed class MainForm : Form
     private readonly Button testButton = new() { Text = "Test" };
     private readonly CheckBox splitLeftRightBox = new() { Text = "Split L/R", AutoSize = true };
     private readonly CheckBox autoRestartBox = new() { Text = "Auto restart", AutoSize = true, Checked = true };
+    private readonly Label pageTitleLabel = new() { AutoSize = true };
+    private readonly Label pageDescriptionLabel = new() { AutoSize = true };
+    private readonly Label routingTitleLabel = new() { AutoSize = true };
+    private readonly Label routingDescriptionLabel = new() { AutoSize = true };
+    private readonly Label actionsTitleLabel = new() { AutoSize = true };
+    private readonly Label formatTitleLabel = new() { AutoSize = true };
+    private readonly Label statusTitleLabel = new() { AutoSize = true };
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
@@ -91,8 +98,8 @@ internal sealed class MainForm : Form
         Text = $"AudioMirror {AppVersion.Display}";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(840, 470);
-        MinimumSize = new Size(840, 470);
+        ClientSize = new Size(900, 620);
+        MinimumSize = new Size(820, 560);
 
         settings = SettingsStore.Load();
         AppText.SetLanguage(settings.LanguageCode);
@@ -136,7 +143,14 @@ internal sealed class MainForm : Form
         DisposeDevices(devices);
         Microsoft.Win32.SystemEvents.PowerModeChanged -= SystemEventsPowerModeChanged;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= SystemEventsDisplaySettingsChanged;
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEventsUserPreferenceChanged;
         base.OnFormClosing(e);
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        UpdateTextWidths();
     }
 
     protected override void WndProc(ref Message m)
@@ -159,7 +173,7 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 5,
-            Padding = new Padding(14),
+            Padding = new Padding(22, 18, 22, 18),
             AutoSize = false
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -167,6 +181,36 @@ internal sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(0, 2, 0, 16)
+        };
+        pageTitleLabel.Font = FluentTheme.Font(20f, FontStyle.Bold);
+        pageDescriptionLabel.Font = FluentTheme.Font(9.5f);
+        pageDescriptionLabel.Margin = new Padding(1, 4, 0, 0);
+        header.Controls.Add(pageTitleLabel, 0, 0);
+        header.Controls.Add(pageDescriptionLabel, 0, 1);
+
+        var routingCard = new CardPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true
+        };
+        var routingContent = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 3
+        };
+        routingTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
+        routingDescriptionLabel.Font = FluentTheme.Font(9f);
+        routingDescriptionLabel.Margin = new Padding(0, 2, 0, 14);
 
         var grid = new TableLayoutPanel
         {
@@ -176,7 +220,7 @@ internal sealed class MainForm : Form
             AutoSize = true
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 87));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -192,27 +236,92 @@ internal sealed class MainForm : Form
         grid.Controls.Add(gainLabel, 3, 4);
         grid.Controls.Add(delayLabel, 4, 4);
 
+        routingContent.Controls.Add(routingTitleLabel, 0, 0);
+        routingContent.Controls.Add(routingDescriptionLabel, 0, 1);
+        routingContent.Controls.Add(grid, 0, 2);
+        routingCard.Controls.Add(routingContent);
+
+        var actionsCard = new CardPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true
+        };
+        var actionsContent = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 3
+        };
+        actionsTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
+
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Padding = new Padding(0, 12, 0, 8)
+            Padding = new Padding(0, 10, 0, 2),
+            Margin = new Padding(0)
         };
         buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, fixVolumeButton, syncButton, testButton, splitLeftRightBox, autoRestartBox]);
 
-        statusLabel.BorderStyle = BorderStyle.FixedSingle;
-        statusLabel.Padding = new Padding(8);
-        formatLabel.Padding = new Padding(4, 6, 4, 4);
+        hintLabel.Margin = new Padding(0, 8, 0, 0);
+        actionsContent.Controls.Add(actionsTitleLabel, 0, 0);
+        actionsContent.Controls.Add(buttons, 0, 1);
+        actionsContent.Controls.Add(hintLabel, 0, 2);
+        actionsCard.Controls.Add(actionsContent);
 
-        root.Controls.Add(grid, 0, 0);
-        root.Controls.Add(buttons, 0, 1);
-        root.Controls.Add(hintLabel, 0, 2);
-        root.Controls.Add(formatLabel, 0, 3);
-        root.Controls.Add(statusLabel, 0, 4);
+        var formatCard = new CardPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(16, 14, 16, 14)
+        };
+        var formatContent = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 2
+        };
+        formatTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
+        formatLabel.BorderStyle = BorderStyle.None;
+        formatLabel.Height = 44;
+        formatLabel.Padding = new Padding(0, 8, 0, 0);
+        formatContent.Controls.Add(formatTitleLabel, 0, 0);
+        formatContent.Controls.Add(formatLabel, 0, 1);
+        formatCard.Controls.Add(formatContent);
+
+        var statusCard = new CardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(16, 14, 16, 14)
+        };
+        var statusContent = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2
+        };
+        statusContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        statusContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        statusTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
+        statusLabel.BorderStyle = BorderStyle.None;
+        statusLabel.Padding = new Padding(0, 10, 0, 0);
+        statusContent.Controls.Add(statusTitleLabel, 0, 0);
+        statusContent.Controls.Add(statusLabel, 0, 1);
+        statusCard.Controls.Add(statusContent);
+
+        root.Controls.Add(header, 0, 0);
+        root.Controls.Add(routingCard, 0, 1);
+        root.Controls.Add(actionsCard, 0, 2);
+        root.Controls.Add(formatCard, 0, 3);
+        root.Controls.Add(statusCard, 0, 4);
         Controls.Add(root);
         Controls.Add(menuStrip);
         MainMenuStrip = menuStrip;
+        UpdateTextWidths();
+        ApplyVisualTheme();
     }
 
     private void BuildMenu()
@@ -374,6 +483,7 @@ internal sealed class MainForm : Form
         deviceRefreshTimer.Tick += (_, _) => DeviceRefreshTick();
         Microsoft.Win32.SystemEvents.PowerModeChanged += SystemEventsPowerModeChanged;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += SystemEventsDisplaySettingsChanged;
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEventsUserPreferenceChanged;
         Resize += (_, _) =>
         {
             if (WindowState == FormWindowState.Minimized)
@@ -450,6 +560,13 @@ internal sealed class MainForm : Form
         gainLabel.Text = AppText.T("Gain");
         delayLabel.Text = AppText.T("DelayMs");
         hintLabel.Text = AppText.T("Hint");
+        pageTitleLabel.Text = AppText.T("MainTitle");
+        pageDescriptionLabel.Text = AppText.T("MainDescription");
+        routingTitleLabel.Text = AppText.T("RoutingTitle");
+        routingDescriptionLabel.Text = AppText.T("RoutingDescription");
+        actionsTitleLabel.Text = AppText.T("ActionsTitle");
+        formatTitleLabel.Text = AppText.T("FormatTitle");
+        statusTitleLabel.Text = AppText.T("StatusTitle");
         ApplyTooltips();
 
         foreach (var item in languageItems)
@@ -466,7 +583,34 @@ internal sealed class MainForm : Form
         FitCommandButton(fixVolumeButton);
         FitCommandButton(syncButton);
         FitCommandButton(testButton);
+        ApplyVisualTheme();
         UpdateCommandState();
+    }
+
+    private void ApplyVisualTheme()
+    {
+        var colors = FluentTheme.Current;
+        FluentTheme.ApplyWindow(this);
+        pageDescriptionLabel.ForeColor = colors.SecondaryText;
+        routingDescriptionLabel.ForeColor = colors.SecondaryText;
+        hintLabel.ForeColor = colors.SecondaryText;
+        statusLabel.ForeColor = colors.Text;
+        formatLabel.ForeColor = colors.SecondaryText;
+
+        FluentTheme.StyleButton(startButton, colors, primary: true);
+        FluentTheme.StyleButton(stopButton, colors, destructive: true);
+        foreach (var button in new[] { refreshButton, saveButton, startupButton, soundSettingsButton, fixVolumeButton, syncButton, testButton })
+        {
+            FluentTheme.StyleButton(button, colors);
+        }
+    }
+
+    private void UpdateTextWidths()
+    {
+        var contentWidth = Math.Max(320, ClientSize.Width - 92);
+        pageDescriptionLabel.MaximumSize = new Size(contentWidth, 0);
+        routingDescriptionLabel.MaximumSize = new Size(contentWidth, 0);
+        hintLabel.MaximumSize = new Size(contentWidth, 0);
     }
 
     private void ApplyTooltips()
@@ -863,6 +1007,7 @@ internal sealed class MainForm : Form
         if (engine is null)
         {
             statusLabel.Text = AppText.T("StatusStopped");
+            statusLabel.ForeColor = FluentTheme.Current.SecondaryText;
             UpdateMeters();
             return;
         }
@@ -880,6 +1025,12 @@ internal sealed class MainForm : Form
             : hasDroppedFrames
                 ? AppText.T("StatusDroppingFrames")
                 : AppText.T("StatusRunningNormally");
+        var statusKind = engine.LastError is not null
+            ? StatusKind.Error
+            : noSourceAudio || hasDroppedFrames
+                ? StatusKind.Warning
+                : StatusKind.Success;
+        statusLabel.ForeColor = FluentTheme.StatusColor(statusKind, FluentTheme.Current);
         statusLabel.Text =
             summary + Environment.NewLine +
             AppText.F("RunningTargetsLine", engine.SourceName, engine.TargetNames) + Environment.NewLine +
@@ -1014,6 +1165,20 @@ internal sealed class MainForm : Form
     private void SystemEventsDisplaySettingsChanged(object? sender, EventArgs e)
     {
         ScheduleDeviceRefresh("DisplayChange", engine is not null || desiredMirroring);
+    }
+
+    private void SystemEventsUserPreferenceChanged(object? sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category is Microsoft.Win32.UserPreferenceCategory.General or Microsoft.Win32.UserPreferenceCategory.Color)
+        {
+            if (IsHandleCreated && !IsDisposed)
+            {
+                BeginInvoke((Action)ApplyVisualTheme);
+            }
+
+            UpdateFormatWarning();
+            UpdateStatus();
+        }
     }
 
     private void ScheduleDeviceRefresh(string reasonKey, bool restartWhenReady)
@@ -1168,7 +1333,8 @@ internal sealed class MainForm : Form
                 thirdTargetEnabledBox.Checked && thirdTargetBox.SelectedItem is not AudioDeviceInfo)
             {
                 formatLabel.Text = AppText.T("SelectDevices");
-                formatLabel.BackColor = SystemColors.Control;
+                formatLabel.BackColor = Color.Transparent;
+                formatLabel.ForeColor = FluentTheme.StatusColor(StatusKind.Info, FluentTheme.Current);
                 return;
             }
 
@@ -1180,8 +1346,8 @@ internal sealed class MainForm : Form
                 SetFormatMeter(secondMeter, secondTarget.IsActive, AppText.F("FormatTooltip", AppText.T("Target2"), DeviceStateText(secondTarget)));
                 SetFormatMeter(thirdMeter, thirdTarget?.IsActive ?? true, AppText.F("FormatTooltip", AppText.T("Target3"), thirdTarget is null ? AppText.T("Stopped") : DeviceStateText(thirdTarget)));
                 formatLabel.Text = AppText.T("NotActiveSelected");
-                formatLabel.BackColor = SystemColors.Control;
-                formatLabel.ForeColor = Color.FromArgb(160, 95, 0);
+                formatLabel.BackColor = Color.Transparent;
+                formatLabel.ForeColor = FluentTheme.StatusColor(StatusKind.Warning, FluentTheme.Current);
                 return;
             }
 
@@ -1208,8 +1374,10 @@ internal sealed class MainForm : Form
                         ? AppText.F("TargetsMatch", firstFormat.DisplayName, sourceFormat.DisplayName)
                         : AppText.F("TargetFormatsDiffer", firstFormat.DisplayName, secondFormat.DisplayName));
 
-            formatLabel.BackColor = SystemColors.Control;
-            formatLabel.ForeColor = volumeWarnings.Text is null && (allMatch || targetsMatch) ? Color.FromArgb(20, 110, 45) : Color.FromArgb(160, 95, 0);
+            formatLabel.BackColor = Color.Transparent;
+            formatLabel.ForeColor = FluentTheme.StatusColor(
+                volumeWarnings.Text is null && (allMatch || targetsMatch) ? StatusKind.Success : StatusKind.Warning,
+                FluentTheme.Current);
         }
         catch (Exception ex)
         {
@@ -1218,14 +1386,16 @@ internal sealed class MainForm : Form
             SetFormatMeter(secondMeter, false, AppText.T("CouldNotReadFormatShort"));
             SetFormatMeter(thirdMeter, false, AppText.T("CouldNotReadFormatShort"));
             formatLabel.Text = AppText.F("CouldNotReadFormat", ex.Message);
-            formatLabel.BackColor = SystemColors.Control;
-            formatLabel.ForeColor = Color.FromArgb(170, 40, 40);
+            formatLabel.BackColor = Color.Transparent;
+            formatLabel.ForeColor = FluentTheme.StatusColor(StatusKind.Error, FluentTheme.Current);
         }
     }
 
     private static void SetFormatMeter(LevelMeter meter, bool ok, string tooltipText, string? volumeWarning = null)
     {
-        meter.StatusColor = ok ? Color.FromArgb(45, 170, 80) : Color.FromArgb(230, 175, 45);
+        meter.StatusColor = ok
+            ? FluentTheme.Current.Success
+            : FluentTheme.Current.Warning;
         var warning = string.IsNullOrWhiteSpace(volumeWarning) ? "" : $" {volumeWarning}.";
         ToolTipProvider.SetToolTip(meter, $"{tooltipText}.{warning} {AppText.T("OpenSoundTooltip")}");
     }

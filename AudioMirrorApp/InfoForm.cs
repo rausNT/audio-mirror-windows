@@ -9,13 +9,14 @@ internal sealed class InfoForm : Form
         Width = 680;
         Height = 560;
         MinimumSize = new Size(520, 420);
+        FluentTheme.ApplyWindow(this);
 
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             RowCount = 3,
             ColumnCount = 1,
-            Padding = new Padding(16)
+            Padding = new Padding(22, 18, 22, 18)
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -25,10 +26,15 @@ internal sealed class InfoForm : Form
         {
             Text = heading,
             AutoSize = true,
-            Font = new Font(Font.FontFamily, 16, FontStyle.Bold),
-            Padding = new Padding(0, 0, 0, 10)
+            Font = FluentTheme.Font(18f, FontStyle.Bold),
+            Padding = new Padding(0, 0, 0, 12)
         };
 
+        var textCard = new CardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(14)
+        };
         var textBox = new TextBox
         {
             Text = body.Replace("\n", Environment.NewLine),
@@ -36,10 +42,11 @@ internal sealed class InfoForm : Form
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
-            BorderStyle = BorderStyle.FixedSingle,
-            Font = new Font(FontFamily.GenericSansSerif, 10),
+            BorderStyle = BorderStyle.None,
+            Font = FluentTheme.Font(10f),
             WordWrap = true
         };
+        textCard.Controls.Add(textBox);
 
         var closeButton = new Button
         {
@@ -53,9 +60,10 @@ internal sealed class InfoForm : Form
         };
 
         root.Controls.Add(titleLabel, 0, 0);
-        root.Controls.Add(textBox, 0, 1);
+        root.Controls.Add(textCard, 0, 1);
         root.Controls.Add(closeButton, 0, 2);
         Controls.Add(root);
         AcceptButton = closeButton;
+        FluentTheme.ApplyWindow(this);
     }
 }

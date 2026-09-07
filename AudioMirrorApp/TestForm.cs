@@ -60,6 +60,7 @@ internal sealed class TestForm : Form
         Controls.Add(speakerView);
         Controls.Add(buttons);
         Controls.Add(hintLabel);
+        ApplyVisualTheme();
 
         speakerView.SpeakerClicked += mode => SetMode(mode, false);
         leftButton.Click += (_, _) => SetMode(TestToneMode.Left, false);
@@ -109,6 +110,18 @@ internal sealed class TestForm : Form
         }
     }
 
+    private void ApplyVisualTheme()
+    {
+        var colors = FluentTheme.Current;
+        FluentTheme.ApplyWindow(this);
+        speakerView.BackColor = colors.Window;
+        FluentTheme.StyleButton(stopButton, colors, destructive: true);
+        foreach (var button in new[] { leftButton, rightButton, thirdButton, bothButton })
+        {
+            FluentTheme.StyleButton(button, colors);
+        }
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         animationTimer.Stop();
@@ -139,7 +152,7 @@ internal sealed class TestForm : Form
         public SpeakerView()
         {
             DoubleBuffered = true;
-            BackColor = Color.FromArgb(248, 250, 252);
+            BackColor = FluentTheme.Current.Window;
         }
 
         public event Action<TestToneMode>? SpeakerClicked;
@@ -271,6 +284,7 @@ internal sealed class TestForm : Form
             var center = new PointF(area.Left + area.Width / 2, area.Top + area.Height * 0.42f);
             var radius = Math.Min(area.Width, area.Height) * 0.28f;
             var glow = active ? 18f + MathF.Sin(pulse) * 7f : hover ? 8f : 0f;
+            var colors = FluentTheme.Current;
             var speakerRect = new RectangleF(center.X - radius, center.Y - radius, radius * 2, radius * 2);
             var shadowRect = speakerRect;
             shadowRect.Offset(0, radius * 0.07f);
@@ -328,7 +342,7 @@ internal sealed class TestForm : Form
             using var shineBrush = new SolidBrush(Color.FromArgb(active ? 135 : 95, Color.White));
             g.FillEllipse(shineBrush, center.X - radius * 0.15f, center.Y - radius * 0.19f, radius * 0.18f, radius * 0.13f);
 
-            using var textBrush = new SolidBrush(active ? Color.FromArgb(20, 90, 130) : Color.FromArgb(92, 100, 110));
+            using var textBrush = new SolidBrush(active ? colors.Accent : colors.SecondaryText);
             using var textShadowBrush = new SolidBrush(Color.FromArgb(28, 0, 0, 0));
             using var font = new Font("Segoe UI", 22, FontStyle.Bold, GraphicsUnit.Point);
             var size = g.MeasureString(label, font);
