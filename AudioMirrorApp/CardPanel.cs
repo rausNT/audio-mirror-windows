@@ -12,8 +12,8 @@ internal sealed class CardPanel : Panel
     public CardPanel()
     {
         DoubleBuffered = true;
-        Padding = new Padding(16);
-        Margin = new Padding(0, 0, 0, 12);
+        Padding = new Padding(12);
+        Margin = new Padding(0, 0, 0, 8);
     }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]

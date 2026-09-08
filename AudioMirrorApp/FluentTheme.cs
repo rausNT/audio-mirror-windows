@@ -87,7 +87,7 @@ internal static class FluentTheme
             case ComboBox comboBox:
                 comboBox.BackColor = colors.SurfaceAlt;
                 comboBox.ForeColor = colors.Text;
-                comboBox.FlatStyle = FlatStyle.Flat;
+                comboBox.FlatStyle = FlatStyle.System;
                 break;
             case NumericUpDown numberBox:
                 numberBox.BackColor = colors.SurfaceAlt;

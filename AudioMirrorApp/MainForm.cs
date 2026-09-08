@@ -98,8 +98,8 @@ internal sealed class MainForm : Form
         Text = $"AudioMirror {AppVersion.Display}";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(900, 620);
-        MinimumSize = new Size(820, 560);
+        ClientSize = new Size(900, 540);
+        MinimumSize = new Size(780, 500);
 
         settings = SettingsStore.Load();
         AppText.SetLanguage(settings.LanguageCode);
@@ -116,6 +116,8 @@ internal sealed class MainForm : Form
                 ShowSetupWizard(markCompleted: true);
                 return;
             }
+
+            FocusDefaultButton();
 
             if (this.startAfterShown)
             {
@@ -173,7 +175,7 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 5,
-            Padding = new Padding(22, 18, 22, 18),
+            Padding = new Padding(18, 12, 18, 14),
             AutoSize = false
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -188,11 +190,11 @@ internal sealed class MainForm : Form
             AutoSize = true,
             ColumnCount = 1,
             RowCount = 2,
-            Margin = new Padding(0, 2, 0, 16)
+            Margin = new Padding(0, 0, 0, 10)
         };
-        pageTitleLabel.Font = FluentTheme.Font(20f, FontStyle.Bold);
+        pageTitleLabel.Font = FluentTheme.Font(18f, FontStyle.Bold);
         pageDescriptionLabel.Font = FluentTheme.Font(9.5f);
-        pageDescriptionLabel.Margin = new Padding(1, 4, 0, 0);
+        pageDescriptionLabel.Margin = new Padding(1, 2, 0, 0);
         header.Controls.Add(pageTitleLabel, 0, 0);
         header.Controls.Add(pageDescriptionLabel, 0, 1);
 
@@ -210,7 +212,7 @@ internal sealed class MainForm : Form
         };
         routingTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
         routingDescriptionLabel.Font = FluentTheme.Font(9f);
-        routingDescriptionLabel.Margin = new Padding(0, 2, 0, 14);
+        routingDescriptionLabel.Margin = new Padding(0, 1, 0, 10);
 
         var grid = new TableLayoutPanel
         {
@@ -260,12 +262,12 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Padding = new Padding(0, 10, 0, 2),
+            Padding = new Padding(0, 8, 0, 0),
             Margin = new Padding(0)
         };
         buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, fixVolumeButton, syncButton, testButton, splitLeftRightBox, autoRestartBox]);
 
-        hintLabel.Margin = new Padding(0, 8, 0, 0);
+        hintLabel.Margin = new Padding(0, 6, 0, 0);
         actionsContent.Controls.Add(actionsTitleLabel, 0, 0);
         actionsContent.Controls.Add(buttons, 0, 1);
         actionsContent.Controls.Add(hintLabel, 0, 2);
@@ -275,7 +277,7 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            Padding = new Padding(16, 14, 16, 14)
+            Padding = new Padding(12, 10, 12, 10)
         };
         var formatContent = new TableLayoutPanel
         {
@@ -295,7 +297,7 @@ internal sealed class MainForm : Form
         var statusCard = new CardPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(16, 14, 16, 14)
+            Padding = new Padding(12, 10, 12, 10)
         };
         var statusContent = new TableLayoutPanel
         {
@@ -307,7 +309,7 @@ internal sealed class MainForm : Form
         statusContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         statusTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
         statusLabel.BorderStyle = BorderStyle.None;
-        statusLabel.Padding = new Padding(0, 10, 0, 0);
+        statusLabel.Padding = new Padding(0, 6, 0, 0);
         statusContent.Controls.Add(statusTitleLabel, 0, 0);
         statusContent.Controls.Add(statusLabel, 0, 1);
         statusCard.Controls.Add(statusContent);
@@ -594,7 +596,8 @@ internal sealed class MainForm : Form
         pageDescriptionLabel.ForeColor = colors.SecondaryText;
         routingDescriptionLabel.ForeColor = colors.SecondaryText;
         hintLabel.ForeColor = colors.SecondaryText;
-        statusLabel.ForeColor = colors.Text;
+        statusTitleLabel.ForeColor = colors.Text;
+        statusLabel.ForeColor = colors.SecondaryText;
         formatLabel.ForeColor = colors.SecondaryText;
 
         FluentTheme.StyleButton(startButton, colors, primary: true);
@@ -611,6 +614,11 @@ internal sealed class MainForm : Form
         pageDescriptionLabel.MaximumSize = new Size(contentWidth, 0);
         routingDescriptionLabel.MaximumSize = new Size(contentWidth, 0);
         hintLabel.MaximumSize = new Size(contentWidth, 0);
+    }
+
+    private void FocusDefaultButton()
+    {
+        ActiveControl = startButton.Enabled ? startButton : refreshButton;
     }
 
     private void ApplyTooltips()
@@ -1006,6 +1014,7 @@ internal sealed class MainForm : Form
     {
         if (engine is null)
         {
+            statusTitleLabel.ForeColor = FluentTheme.Current.Text;
             statusLabel.Text = AppText.T("StatusStopped");
             statusLabel.ForeColor = FluentTheme.Current.SecondaryText;
             UpdateMeters();
@@ -1030,7 +1039,9 @@ internal sealed class MainForm : Form
             : noSourceAudio || hasDroppedFrames
                 ? StatusKind.Warning
                 : StatusKind.Success;
-        statusLabel.ForeColor = FluentTheme.StatusColor(statusKind, FluentTheme.Current);
+        var colors = FluentTheme.Current;
+        statusTitleLabel.ForeColor = FluentTheme.StatusColor(statusKind, colors);
+        statusLabel.ForeColor = colors.SecondaryText;
         statusLabel.Text =
             summary + Environment.NewLine +
             AppText.F("RunningTargetsLine", engine.SourceName, engine.TargetNames) + Environment.NewLine +

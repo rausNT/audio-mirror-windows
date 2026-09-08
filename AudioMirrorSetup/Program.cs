@@ -8,10 +8,12 @@ namespace AudioMirrorSetup;
 internal static class Program
 {
     private const string AppName = "AudioMirror";
-    private const string DisplayVersion = "0.9.23";
+    private const string DisplayVersion = "0.9.24";
     private const string RepositoryUrl = "https://github.com/rausNT/audio-mirror-windows";
     private const string ReleaseSummary =
         "Changes in this update:\n" +
+        "- Tightens the main window layout so the lower status area is visible at common Windows scaling levels.\n" +
+        "- Softens runtime status colors and keeps detailed counters in a calmer secondary text style.\n" +
         "- Updates the application, installer, tray, and title-bar icon.\n" +
         "- Refreshes the UI with a Windows 11 style layout, system theme colors, and updated dialogs.\n" +
         "- Makes keyboard Mute and Windows Source volume affect mirrored Target audio.\n" +
