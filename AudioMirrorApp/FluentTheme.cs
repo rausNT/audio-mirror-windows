@@ -118,16 +118,10 @@ internal static class FluentTheme
 
     public static void StyleButton(Button button, FluentColors colors, bool primary = false, bool destructive = false)
     {
-        button.FlatStyle = FlatStyle.Flat;
-        button.FlatAppearance.BorderSize = primary ? 0 : 1;
-        button.FlatAppearance.BorderColor = colors.Border;
-        button.BackColor = primary
-            ? colors.Accent
-            : destructive
-                ? Blend(colors.Error, colors.Surface, colors.Dark ? 0.24f : 0.12f)
-                : colors.SurfaceAlt;
-        button.ForeColor = primary ? colors.AccentText : colors.Text;
-        button.UseVisualStyleBackColor = false;
+        button.FlatStyle = FlatStyle.System;
+        button.UseVisualStyleBackColor = true;
+        button.BackColor = SystemColors.Control;
+        button.ForeColor = SystemColors.ControlText;
     }
 
     public static Color StatusColor(StatusKind status, FluentColors colors)

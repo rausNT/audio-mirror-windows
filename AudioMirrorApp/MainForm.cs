@@ -46,6 +46,12 @@ internal sealed class MainForm : Form
     private readonly Label statusTitleLabel = new() { AutoSize = true };
     private readonly Label formatLabel = new() { AutoSize = false, Height = 42, Dock = DockStyle.Fill };
     private readonly Label statusLabel = new() { AutoSize = false, Height = 76, Dock = DockStyle.Fill };
+    private readonly Panel navigationPanel = new() { Dock = DockStyle.Fill };
+    private readonly Button navOverviewButton = new() { Text = "Overview" };
+    private readonly Button navSoundButton = new() { Text = "Sound settings" };
+    private readonly Button navTestButton = new() { Text = "Test speakers" };
+    private readonly Button navWizardButton = new() { Text = "Setup wizard" };
+    private readonly Button navHelpButton = new() { Text = "Help" };
     private readonly System.Windows.Forms.Timer statsTimer = new() { Interval = 500 };
     private readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 60 };
     private readonly System.Windows.Forms.Timer watchdogTimer = new() { Interval = 2000 };
@@ -98,8 +104,8 @@ internal sealed class MainForm : Form
         Text = $"AudioMirror {AppVersion.Display}";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(900, 540);
-        MinimumSize = new Size(780, 500);
+        ClientSize = new Size(1090, 720);
+        MinimumSize = new Size(960, 640);
 
         settings = SettingsStore.Load();
         AppText.SetLanguage(settings.LanguageCode);
@@ -170,38 +176,86 @@ internal sealed class MainForm : Form
     {
         BuildMenu();
 
-        var root = new TableLayoutPanel
+        var shell = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 5,
-            Padding = new Padding(18, 12, 18, 14),
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(0),
             AutoSize = false
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var header = new TableLayoutPanel
+        var navStack = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 1,
-            RowCount = 2,
-            Margin = new Padding(0, 0, 0, 10)
+            RowCount = 7,
+            Padding = new Padding(8, 16, 8, 0)
         };
-        pageTitleLabel.Font = FluentTheme.Font(18f, FontStyle.Bold);
+        navStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        navStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        navStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        navStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        navStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        navStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        navStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        var navTitle = new Label
+        {
+            Text = "AudioMirror",
+            AutoSize = true,
+            Font = FluentTheme.Font(10.5f, FontStyle.Bold),
+            Margin = new Padding(10, 0, 0, 14)
+        };
+        ConfigureNavButton(navOverviewButton);
+        ConfigureNavButton(navSoundButton);
+        ConfigureNavButton(navTestButton);
+        ConfigureNavButton(navWizardButton);
+        ConfigureNavButton(navHelpButton);
+        navStack.Controls.Add(navTitle, 0, 0);
+        navStack.Controls.Add(navOverviewButton, 0, 1);
+        navStack.Controls.Add(navSoundButton, 0, 2);
+        navStack.Controls.Add(navTestButton, 0, 3);
+        navStack.Controls.Add(navWizardButton, 0, 4);
+        navStack.Controls.Add(navHelpButton, 0, 5);
+        navigationPanel.Controls.Add(navStack);
+
+        var scrollHost = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(30, 20, 30, 20)
+        };
+
+        var content = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 5
+        };
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        pageTitleLabel.Font = FluentTheme.Font(20f, FontStyle.Bold);
+        pageTitleLabel.Margin = new Padding(0, 0, 0, 4);
         pageDescriptionLabel.Font = FluentTheme.Font(9.5f);
-        pageDescriptionLabel.Margin = new Padding(1, 2, 0, 0);
-        header.Controls.Add(pageTitleLabel, 0, 0);
-        header.Controls.Add(pageDescriptionLabel, 0, 1);
+        pageDescriptionLabel.Margin = new Padding(0, 0, 0, 14);
 
         var routingCard = new CardPanel
         {
             Dock = DockStyle.Top,
-            AutoSize = true
+            AutoSize = true,
+            Padding = new Padding(22, 14, 22, 14),
+            Margin = new Padding(0, 0, 0, 12)
         };
         var routingContent = new TableLayoutPanel
         {
@@ -211,8 +265,9 @@ internal sealed class MainForm : Form
             RowCount = 3
         };
         routingTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
+        routingTitleLabel.Margin = new Padding(0, 0, 0, 2);
         routingDescriptionLabel.Font = FluentTheme.Font(9f);
-        routingDescriptionLabel.Margin = new Padding(0, 1, 0, 10);
+        routingDescriptionLabel.Margin = new Padding(0, 0, 0, 8);
 
         var grid = new TableLayoutPanel
         {
@@ -237,26 +292,26 @@ internal sealed class MainForm : Form
         grid.Controls.Add(new Label { Text = "", AutoSize = true }, 2, 4);
         grid.Controls.Add(gainLabel, 3, 4);
         grid.Controls.Add(delayLabel, 4, 4);
-
         routingContent.Controls.Add(routingTitleLabel, 0, 0);
         routingContent.Controls.Add(routingDescriptionLabel, 0, 1);
         routingContent.Controls.Add(grid, 0, 2);
         routingCard.Controls.Add(routingContent);
 
-        var actionsCard = new CardPanel
+        var controlCard = new CardPanel
         {
             Dock = DockStyle.Top,
-            AutoSize = true
+            AutoSize = true,
+            Padding = new Padding(22, 14, 22, 14),
+            Margin = new Padding(0, 0, 0, 12)
         };
-        var actionsContent = new TableLayoutPanel
+        var controlContent = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 1,
-            RowCount = 3
+            RowCount = 4
         };
         actionsTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
-
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -265,19 +320,31 @@ internal sealed class MainForm : Form
             Padding = new Padding(0, 8, 0, 0),
             Margin = new Padding(0)
         };
-        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, fixVolumeButton, syncButton, testButton, splitLeftRightBox, autoRestartBox]);
+        buttons.Controls.AddRange([refreshButton, startButton, stopButton, saveButton, startupButton, soundSettingsButton, fixVolumeButton, syncButton, testButton]);
+
+        var options = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(0, 4, 0, 0),
+            Margin = new Padding(0)
+        };
+        options.Controls.AddRange([splitLeftRightBox, autoRestartBox]);
 
         hintLabel.Margin = new Padding(0, 6, 0, 0);
-        actionsContent.Controls.Add(actionsTitleLabel, 0, 0);
-        actionsContent.Controls.Add(buttons, 0, 1);
-        actionsContent.Controls.Add(hintLabel, 0, 2);
-        actionsCard.Controls.Add(actionsContent);
+        controlContent.Controls.Add(actionsTitleLabel, 0, 0);
+        controlContent.Controls.Add(buttons, 0, 1);
+        controlContent.Controls.Add(options, 0, 2);
+        controlContent.Controls.Add(hintLabel, 0, 3);
+        controlCard.Controls.Add(controlContent);
 
         var formatCard = new CardPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            Padding = new Padding(12, 10, 12, 10)
+            Padding = new Padding(22, 14, 22, 14),
+            Margin = new Padding(0, 0, 6, 0)
         };
         var formatContent = new TableLayoutPanel
         {
@@ -288,38 +355,57 @@ internal sealed class MainForm : Form
         };
         formatTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
         formatLabel.BorderStyle = BorderStyle.None;
-        formatLabel.Height = 44;
-        formatLabel.Padding = new Padding(0, 8, 0, 0);
+        formatLabel.Height = 36;
+        formatLabel.Padding = new Padding(0, 6, 0, 0);
         formatContent.Controls.Add(formatTitleLabel, 0, 0);
         formatContent.Controls.Add(formatLabel, 0, 1);
         formatCard.Controls.Add(formatContent);
 
         var statusCard = new CardPanel
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(12, 10, 12, 10)
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(22, 14, 22, 14),
+            Margin = new Padding(6, 0, 0, 0)
         };
         var statusContent = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
             ColumnCount = 1,
             RowCount = 2
         };
-        statusContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        statusContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         statusTitleLabel.Font = FluentTheme.Font(11.5f, FontStyle.Bold);
         statusLabel.BorderStyle = BorderStyle.None;
+        statusLabel.Height = 112;
         statusLabel.Padding = new Padding(0, 6, 0, 0);
         statusContent.Controls.Add(statusTitleLabel, 0, 0);
         statusContent.Controls.Add(statusLabel, 0, 1);
         statusCard.Controls.Add(statusContent);
 
-        root.Controls.Add(header, 0, 0);
-        root.Controls.Add(routingCard, 0, 1);
-        root.Controls.Add(actionsCard, 0, 2);
-        root.Controls.Add(formatCard, 0, 3);
-        root.Controls.Add(statusCard, 0, 4);
-        Controls.Add(root);
+        var bottomGrid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0)
+        };
+        bottomGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+        bottomGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
+        bottomGrid.Controls.Add(formatCard, 0, 0);
+        bottomGrid.Controls.Add(statusCard, 1, 0);
+
+        content.Controls.Add(pageTitleLabel, 0, 0);
+        content.Controls.Add(pageDescriptionLabel, 0, 1);
+        content.Controls.Add(routingCard, 0, 2);
+        content.Controls.Add(controlCard, 0, 3);
+        content.Controls.Add(bottomGrid, 0, 4);
+        scrollHost.Controls.Add(content);
+
+        shell.Controls.Add(navigationPanel, 0, 0);
+        shell.Controls.Add(scrollHost, 1, 0);
+        Controls.Add(shell);
         Controls.Add(menuStrip);
         MainMenuStrip = menuStrip;
         UpdateTextWidths();
@@ -413,6 +499,18 @@ internal sealed class MainForm : Form
         }
     }
 
+    private static void ConfigureNavButton(Button button)
+    {
+        button.Dock = DockStyle.Top;
+        button.Height = 36;
+        button.Margin = new Padding(0, 0, 0, 4);
+        button.Padding = new Padding(12, 0, 0, 0);
+        button.TextAlign = ContentAlignment.MiddleLeft;
+        button.FlatStyle = FlatStyle.Flat;
+        button.TabStop = false;
+        button.UseVisualStyleBackColor = false;
+    }
+
     private void WireEvents()
     {
         refreshButton.Click += (_, _) => RefreshDevices();
@@ -424,6 +522,11 @@ internal sealed class MainForm : Form
         fixVolumeButton.Click += (_, _) => FixSelectedDeviceVolumes();
         syncButton.Click += (_, _) => SyncAppSettings();
         testButton.Click += (_, _) => OpenTestWindow();
+        navOverviewButton.Click += (_, _) => FocusDefaultButton();
+        navSoundButton.Click += (_, _) => OpenSoundSettings();
+        navTestButton.Click += (_, _) => OpenTestWindow();
+        navWizardButton.Click += (_, _) => ShowSetupWizard(markCompleted: true);
+        navHelpButton.Click += (_, _) => ShowHelp();
         menuStartItem.Click += (_, _) => StartMirror();
         menuStopItem.Click += (_, _) => StopMirror();
         menuSaveItem.Click += (_, _) => SaveSettingsFromControls();
@@ -535,6 +638,12 @@ internal sealed class MainForm : Form
         menuHelpItem.Text = AppText.T("UserHelp");
         menuAboutItem.Text = AppText.T("AboutAudioMirror");
 
+        navOverviewButton.Text = AppText.T("Overview");
+        navSoundButton.Text = AppText.T("SoundSettings");
+        navTestButton.Text = AppText.T("TestSpeakers");
+        navWizardButton.Text = AppText.T("SetupWizard");
+        navHelpButton.Text = AppText.T("UserHelp");
+
         trayOpenItem.Text = AppText.T("OpenAudioMirror");
         trayStartItem.Text = AppText.T("Start");
         trayStopItem.Text = AppText.T("Stop");
@@ -593,12 +702,18 @@ internal sealed class MainForm : Form
     {
         var colors = FluentTheme.Current;
         FluentTheme.ApplyWindow(this);
+        navigationPanel.BackColor = colors.SurfaceAlt;
         pageDescriptionLabel.ForeColor = colors.SecondaryText;
         routingDescriptionLabel.ForeColor = colors.SecondaryText;
         hintLabel.ForeColor = colors.SecondaryText;
         statusTitleLabel.ForeColor = colors.Text;
         statusLabel.ForeColor = colors.SecondaryText;
         formatLabel.ForeColor = colors.SecondaryText;
+        StyleNavButton(navOverviewButton, colors, selected: true);
+        StyleNavButton(navSoundButton, colors);
+        StyleNavButton(navTestButton, colors);
+        StyleNavButton(navWizardButton, colors);
+        StyleNavButton(navHelpButton, colors);
 
         FluentTheme.StyleButton(startButton, colors, primary: true);
         FluentTheme.StyleButton(stopButton, colors, destructive: true);
@@ -608,9 +723,23 @@ internal sealed class MainForm : Form
         }
     }
 
+    private static void StyleNavButton(Button button, FluentColors colors, bool selected = false)
+    {
+        button.FlatStyle = FlatStyle.Flat;
+        button.UseVisualStyleBackColor = false;
+        button.BackColor = selected
+            ? FluentTheme.Blend(colors.Accent, colors.SurfaceAlt, colors.Dark ? 0.20f : 0.10f)
+            : Color.Transparent;
+        button.ForeColor = colors.Text;
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = FluentTheme.Blend(colors.Accent, colors.SurfaceAlt, colors.Dark ? 0.16f : 0.08f);
+        button.FlatAppearance.MouseDownBackColor = FluentTheme.Blend(colors.Accent, colors.SurfaceAlt, colors.Dark ? 0.24f : 0.14f);
+    }
+
     private void UpdateTextWidths()
     {
-        var contentWidth = Math.Max(320, ClientSize.Width - 92);
+        var sidebarWidth = navigationPanel.Width > 0 ? navigationPanel.Width : 220;
+        var contentWidth = Math.Max(320, ClientSize.Width - sidebarWidth - 96);
         pageDescriptionLabel.MaximumSize = new Size(contentWidth, 0);
         routingDescriptionLabel.MaximumSize = new Size(contentWidth, 0);
         hintLabel.MaximumSize = new Size(contentWidth, 0);
@@ -657,7 +786,7 @@ internal sealed class MainForm : Form
         button.AutoSize = true;
         button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         button.MinimumSize = new Size(72, 28);
-        button.MaximumSize = new Size(126, 0);
+        button.MaximumSize = new Size(180, 0);
     }
 
     private void RefreshDevices()
@@ -878,6 +1007,12 @@ internal sealed class MainForm : Form
             {
                 EnsureActive(thirdTarget, AppText.T("Target3"));
             }
+            EnsureTargetAudible(firstTarget);
+            EnsureTargetAudible(secondTarget);
+            if (thirdTarget is not null)
+            {
+                EnsureTargetAudible(thirdTarget);
+            }
             settings = ReadSettingsFromControls();
             engine = new WasapiMirrorEngine(
                 source,
@@ -898,6 +1033,7 @@ internal sealed class MainForm : Form
             meterTimer.Start();
             watchdogTimer.Start();
             ResetWatchdog();
+            UpdateFormatWarning();
             UpdateStatus();
             UpdateCommandState();
             desiredMirroring = true;
@@ -1007,6 +1143,15 @@ internal sealed class MainForm : Form
         if (!device.IsActive)
         {
             throw new InvalidOperationException(AppText.F("EnsureActive", role, device.Name));
+        }
+    }
+
+    private static void EnsureTargetAudible(AudioDeviceInfo device)
+    {
+        var volume = CoreAudio.GetEndpointVolumeInfo(device.Device);
+        if (volume.IsSilent)
+        {
+            CoreAudio.SetEndpointVolume(device.Device, muted: false, volume: 1.0f);
         }
     }
 

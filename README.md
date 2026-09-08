@@ -82,6 +82,9 @@ Then press `Start`.
 
 ## Controls
 
+- The main window uses a left navigation rail for the overview, Windows sound
+  settings, speaker test, setup wizard, and help. The overview keeps the active
+  routing, controls, format checks, and live status in one place.
 - `Language`: switches the app UI between English, Russian, German, French,
   Spanish, Italian, Portuguese, Polish, Dutch, Chinese, and Japanese.
 - `Target 3`: optional third output for a soundbar or another playback device.
@@ -100,6 +103,9 @@ Then press `Start`.
 - `Autostart`: registers the app in the current user's Windows startup and
   starts mirroring automatically using saved settings.
 - `Safe levels`: lowers gains above `1.0` back to `1.0` to avoid distortion.
+- On start and auto-restart, AudioMirror automatically unmutes selected target
+  devices if Windows leaves them muted or at `0%`. It does not auto-unmute
+  Source, so the keyboard Mute key can still silence the mirrored audio.
 - `Test`: opens a built-in speaker test with `Left`, `Right`, optional `Third`,
   `Both`, and `Loop`. It plays directly to the selected targets and animates
   the active speaker.
